@@ -53,3 +53,29 @@ export interface PaymentRequest {
 export interface PaymentResponse {
   sessionId: string;
 }
+
+export interface UserProfile {
+  id: number;
+  email: string;
+  isCreator: boolean;
+  isActive: boolean;
+  createdAt: Date;
+  photoCount?: number;
+}
+
+export interface Creator {
+  id: number;
+  email: string;
+  photoCount: number;
+  subscriptionPrice: number;
+  isActive: boolean;
+}
+
+export interface SubscriptionDetails {
+  id: number;
+  subscriber: User;
+  creator: User;
+  startDate: Date;
+  endDate: Date | null;
+  isActive: boolean;
+}

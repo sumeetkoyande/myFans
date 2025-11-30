@@ -14,7 +14,7 @@ export class PaymentsController {
   @Post('subscribe')
   @Roles('user')
   @Throttle({ default: { limit: 5, ttl: 300000 } })
-  async subscribe(@Request() req, @Body() createPaymentDto: CreatePaymentDto) {
+  async subscribe(@Request() req: any, @Body() createPaymentDto: CreatePaymentDto) {
     return this.paymentsService.createCheckoutSession(
       createPaymentDto.amount,
       req.user.email,

@@ -11,9 +11,10 @@ export class PaymentService {
 
   constructor(private http: HttpClient) {}
 
-  createCheckoutSession(creatorId: number): Observable<{ sessionId: string }> {
-    return this.http.post<{ sessionId: string }>(`${this.apiUrl}/create-checkout-session`, {
+  createCheckoutSession(creatorId: number, amount: number = 9.99): Observable<{ sessionId: string }> {
+    return this.http.post<{ sessionId: string }>(`${this.apiUrl}/subscribe`, {
       creatorId,
+      amount,
     });
   }
 

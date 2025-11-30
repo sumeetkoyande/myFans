@@ -1,16 +1,12 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { RouterModule } from '@angular/router';
-import { User } from '../../core/models';
+import { Creator, SubscriptionDetails, User } from '../../core/models';
 import { AuthService } from '../../core/services/auth.service';
 import { PaymentService } from '../../core/services/payment.service';
+import { SubscriptionService } from '../../core/services/subscription.service';
 
-interface Creator {
-  id: number;
-  email: string;
-  photoCount: number;
-  subscriptionPrice: number;
-}
+// Interface moved to core/models
 
 @Component({
   selector: 'app-subscriptions',
@@ -76,7 +72,7 @@ interface Creator {
                 class="px-6 py-4 flex items-center justify-between"
               >
                 <div>
-                  <p class="text-sm font-medium text-gray-900">{{ subscription.creatorEmail }}</p>
+                  <p class="text-sm font-medium text-gray-900">{{ subscription.creator.email }}</p>
                   <p class="text-sm text-gray-600">
                     Started {{ subscription.startDate | date : 'shortDate' }}
                   </p>
@@ -95,11 +91,15 @@ interface Creator {
 })
 export class SubscriptionsComponent implements OnInit {
   creators: Creator[] = [];
-  currentSubscriptions: any[] = [];
+  currentSubscriptions: SubscriptionDetails[] = [];
   loading = false;
   user: User | null = null;
 
-  constructor(private paymentService: PaymentService, private authService: AuthService) {}
+  constructor(
+    private paymentService: PaymentService,
+    private authService: AuthService,
+    private subscriptionService: SubscriptionService
+  ) {}
 
   ngOnInit(): void {
     this.authService.currentUser$.subscribe((user) => {
@@ -110,24 +110,43 @@ export class SubscriptionsComponent implements OnInit {
   }
 
   loadCreators(): void {
-    // Mock data - in real app, this would come from an API
-    this.creators = [
-      { id: 1, email: 'creator1@example.com', photoCount: 25, subscriptionPrice: 9.99 },
-      { id: 2, email: 'creator2@example.com', photoCount: 42, subscriptionPrice: 14.99 },
-      { id: 3, email: 'creator3@example.com', photoCount: 18, subscriptionPrice: 7.99 },
-    ];
+    this.subscriptionService.getAvailableCreators().subscribe({
+      next: (creators) => {
+        this.creators = creators;
+      },
+      error: (error) => {
+        console.error('Error loading creators:', error);
+        // Fallback to mock data if API fails
+        this.creators = [
+          { id: 1, email: 'creator1@example.com', photoCount: 25, subscriptionPrice: 9.99, isActive: true },
+          { id: 2, email: 'creator2@example.com', photoCount: 42, subscriptionPrice: 14.99, isActive: true },
+          { id: 3, email: 'creator3@example.com', photoCount: 18, subscriptionPrice: 7.99, isActive: true },
+        ];
+      }
+    });
   }
 
   loadCurrentSubscriptions(): void {
-    // Mock data - in real app, this would come from an API
-    this.currentSubscriptions = [];
+    this.subscriptionService.getMySubscriptions().subscribe({
+      next: (subscriptions) => {
+        this.currentSubscriptions = subscriptions;
+      },
+      error: (error) => {
+        console.error('Error loading subscriptions:', error);
+        this.currentSubscriptions = [];
+      }
+    });
   }
 
   async subscribeToCreator(creatorId: number): Promise<void> {
     try {
       this.loading = true;
 
-      const response = await this.paymentService.createCheckoutSession(creatorId).toPromise();
+      // Get creator details to determine price
+      const creator = this.creators.find(c => c.id === creatorId);
+      const amount = creator?.subscriptionPrice || 9.99;
+
+      const response = await this.paymentService.createCheckoutSession(creatorId, amount).toPromise();
       if (response?.sessionId) {
         await this.paymentService.redirectToCheckout(response.sessionId);
       }

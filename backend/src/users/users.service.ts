@@ -28,4 +28,21 @@ export class UsersService {
     });
     return this.usersRepository.save(user);
   }
+
+  async getCreators(): Promise<any[]> {
+    const creators = await this.usersRepository.find({
+      where: { isCreator: true, isActive: true },
+      select: ['id', 'email', 'isCreator', 'isActive'],
+    });
+
+    // Add mock data for photoCount and subscriptionPrice
+    // In a real app, you'd join with photos and subscription tables
+    return creators.map(creator => ({
+      id: creator.id,
+      email: creator.email,
+      photoCount: Math.floor(Math.random() * 50) + 10, // Mock data
+      subscriptionPrice: parseFloat((Math.random() * 20 + 5).toFixed(2)), // Mock price between $5-25
+      isActive: creator.isActive,
+    }));
+  }
 }

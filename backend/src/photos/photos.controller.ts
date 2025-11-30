@@ -67,7 +67,7 @@ export class PhotosController {
     }),
   )
   async uploadPhoto(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: any,
     @Request() req: AuthenticatedRequest,
     @Body() uploadPhotoDto: UploadPhotoDto,
   ) {
