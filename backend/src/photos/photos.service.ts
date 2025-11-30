@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { User } from '../users/user/user';
+import { Comment } from './comment/comment';
+import { Like } from './like/like';
 import { Photo } from './photo/photo';
 
 @Injectable()
@@ -10,6 +12,10 @@ export class PhotosService {
   constructor(
     @InjectRepository(Photo)
     private photosRepository: Repository<Photo>,
+    @InjectRepository(Like)
+    private likesRepository: Repository<Like>,
+    @InjectRepository(Comment)
+    private commentsRepository: Repository<Comment>,
     private subscriptionsService: SubscriptionsService,
   ) {}
 
@@ -82,30 +88,44 @@ export class PhotosService {
     return null; // No access
   }
 
-  async getCreatorPhotos(
-    creatorId: number,
-    viewerId: number,
-  ): Promise<Photo[]> {
+  async getCreatorPhotos(creatorId: number, viewerId: number): Promise<any> {
     const isOwner = creatorId === viewerId;
-    const isSubscribed =
-      !isOwner &&
-      (
-        await this.subscriptionsService.getSubscribedCreatorIds(viewerId)
-      ).includes(creatorId);
+    const subscribedCreatorIds =
+      await this.subscriptionsService.getSubscribedCreatorIds(viewerId);
+    const isSubscribed = !isOwner && subscribedCreatorIds.includes(creatorId);
 
-    const queryBuilder = this.photosRepository
+    const allPhotos = await this.photosRepository
       .createQueryBuilder('photo')
       .leftJoinAndSelect('photo.creator', 'creator')
-      .where('photo.creator.id = :creatorId', { creatorId });
+      .where('photo.creator.id = :creatorId', { creatorId })
+      .orderBy('photo.createdAt', 'DESC')
+      .getMany();
 
-    if (!isOwner && !isSubscribed) {
-      // Only show public photos for non-subscribers
-      queryBuilder.andWhere('photo.isPremium = :isPremium', {
-        isPremium: false,
-      });
+    const publicPhotos = allPhotos.filter((photo) => !photo.isPremium);
+    const premiumPhotos = allPhotos.filter((photo) => photo.isPremium);
+
+    if (isOwner || isSubscribed) {
+      // Return all photos for owner or subscribers
+      return {
+        hasAccess: true,
+        photos: allPhotos,
+        publicPhotos,
+        premiumPhotos,
+        totalCount: allPhotos.length,
+        premiumCount: premiumPhotos.length,
+      };
+    } else {
+      // Return limited info for non-subscribers
+      return {
+        hasAccess: false,
+        photos: publicPhotos.slice(0, 3), // Only show 3 preview photos
+        publicPhotos: publicPhotos.slice(0, 3),
+        premiumPhotos: [], // No premium photos
+        totalCount: allPhotos.length,
+        premiumCount: premiumPhotos.length,
+        previewCount: Math.min(3, publicPhotos.length),
+      };
     }
-
-    return queryBuilder.orderBy('photo.createdAt', 'DESC').getMany();
   }
 
   async updatePhoto(
@@ -152,5 +172,149 @@ export class PhotosService {
 
     await this.photosRepository.delete(photoId);
     return { message: 'Photo deleted successfully' };
+  }
+
+  async likePhoto(
+    photoId: number,
+    userId: number,
+  ): Promise<{ message: string; isLiked: boolean }> {
+    const photo = await this.photosRepository.findOne({
+      where: { id: photoId },
+    });
+    if (!photo) {
+      throw new BadRequestException('Photo not found');
+    }
+
+    const existingLike = await this.likesRepository.findOne({
+      where: { photo: { id: photoId }, user: { id: userId } },
+    });
+
+    if (existingLike) {
+      throw new BadRequestException('Photo already liked');
+    }
+
+    const like = this.likesRepository.create({
+      photo: { id: photoId } as Photo,
+      user: { id: userId } as User,
+    });
+
+    await this.likesRepository.save(like);
+    return { message: 'Photo liked successfully', isLiked: true };
+  }
+
+  async unlikePhoto(
+    photoId: number,
+    userId: number,
+  ): Promise<{ message: string; isLiked: boolean }> {
+    const like = await this.likesRepository.findOne({
+      where: { photo: { id: photoId }, user: { id: userId } },
+    });
+
+    if (!like) {
+      throw new BadRequestException('Like not found');
+    }
+
+    await this.likesRepository.delete(like.id);
+    return { message: 'Photo unliked successfully', isLiked: false };
+  }
+
+  async getPhotoLikes(photoId: number): Promise<any> {
+    const likes = await this.likesRepository.find({
+      where: { photo: { id: photoId } },
+      relations: ['user'],
+      select: {
+        id: true,
+        createdAt: true,
+        user: {
+          id: true,
+          email: true,
+          name: true,
+          avatar: true,
+        },
+      },
+    });
+
+    return {
+      count: likes.length,
+      likes: likes.map((like) => ({
+        id: like.id,
+        user: {
+          id: like.user.id,
+          name: like.user.name || like.user.email.split('@')[0],
+          email: like.user.email,
+          avatar: like.user.avatar,
+        },
+        createdAt: like.createdAt,
+      })),
+    };
+  }
+
+  async commentOnPhoto(
+    photoId: number,
+    userId: number,
+    content: string,
+  ): Promise<Comment> {
+    const photo = await this.photosRepository.findOne({
+      where: { id: photoId },
+    });
+    if (!photo) {
+      throw new BadRequestException('Photo not found');
+    }
+
+    if (!content || content.trim().length === 0) {
+      throw new BadRequestException('Comment content cannot be empty');
+    }
+
+    const comment = this.commentsRepository.create({
+      content: content.trim(),
+      photo: { id: photoId } as Photo,
+      user: { id: userId } as User,
+    });
+
+    return this.commentsRepository.save(comment);
+  }
+
+  async getPhotoComments(photoId: number): Promise<Comment[]> {
+    return this.commentsRepository.find({
+      where: { photo: { id: photoId } },
+      relations: ['user'],
+      select: {
+        id: true,
+        content: true,
+        createdAt: true,
+        updatedAt: true,
+        user: {
+          id: true,
+          email: true,
+          name: true,
+          avatar: true,
+        },
+      },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async deleteComment(
+    commentId: number,
+    userId: number,
+  ): Promise<{ message: string }> {
+    const comment = await this.commentsRepository.findOne({
+      where: { id: commentId },
+      relations: ['user', 'photo', 'photo.creator'],
+    });
+
+    if (!comment) {
+      throw new BadRequestException('Comment not found');
+    }
+
+    // Allow deletion if user owns the comment or owns the photo
+    if (comment.user.id !== userId && comment.photo.creator.id !== userId) {
+      throw new BadRequestException(
+        'You can only delete your own comments or comments on your photos',
+      );
+    }
+
+    await this.commentsRepository.delete(commentId);
+    return { message: 'Comment deleted successfully' };
   }
 }

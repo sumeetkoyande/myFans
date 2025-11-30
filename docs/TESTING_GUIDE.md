@@ -209,7 +209,322 @@ describe("UsersService", () => {
 })
 ```
 
-#### 2. Controller Tests
+#### 2. Photos Service Tests with Like/Comment Features
+
+**Photos Service Tests** (`src/photos/photos.service.spec.ts`):
+
+```typescript
+import { Test, TestingModule } from "@nestjs/testing"
+import { getRepositoryToken } from "@nestjs/typeorm"
+import { Repository } from "typeorm"
+import { PhotosService } from "./photos.service"
+import { Photo } from "./entities/photo.entity"
+import { Like } from "./like/like.entity"
+import { Comment } from "./comment/comment.entity"
+import { User } from "../users/entities/user.entity"
+import { SubscriptionsService } from "../subscriptions/subscriptions.service"
+import { NotFoundException } from "@nestjs/common"
+
+describe("PhotosService", () => {
+  let service: PhotosService
+  let photoRepository: Repository<Photo>
+  let likeRepository: Repository<Like>
+  let commentRepository: Repository<Comment>
+  let subscriptionsService: SubscriptionsService
+
+  const mockPhotoRepository = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    create: jest.fn(),
+    save: jest.fn(),
+    remove: jest.fn(),
+    createQueryBuilder: jest.fn(),
+  }
+
+  const mockLikeRepository = {
+    findOne: jest.fn(),
+    create: jest.fn(),
+    save: jest.fn(),
+    remove: jest.fn(),
+    count: jest.fn(),
+  }
+
+  const mockCommentRepository = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    create: jest.fn(),
+    save: jest.fn(),
+    remove: jest.fn(),
+  }
+
+  const mockSubscriptionsService = {
+    hasActiveSubscription: jest.fn(),
+  }
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        PhotosService,
+        {
+          provide: getRepositoryToken(Photo),
+          useValue: mockPhotoRepository,
+        },
+        {
+          provide: getRepositoryToken(Like),
+          useValue: mockLikeRepository,
+        },
+        {
+          provide: getRepositoryToken(Comment),
+          useValue: mockCommentRepository,
+        },
+        {
+          provide: SubscriptionsService,
+          useValue: mockSubscriptionsService,
+        },
+      ],
+    }).compile()
+
+    service = module.get<PhotosService>(PhotosService)
+    photoRepository = module.get<Repository<Photo>>(getRepositoryToken(Photo))
+    likeRepository = module.get<Repository<Like>>(getRepositoryToken(Like))
+    commentRepository = module.get<Repository<Comment>>(
+      getRepositoryToken(Comment)
+    )
+    subscriptionsService =
+      module.get<SubscriptionsService>(SubscriptionsService)
+  })
+
+  afterEach(() => {
+    jest.clearAllMocks()
+  })
+
+  describe("getCreatorPhotos", () => {
+    const mockPhotos = [
+      { id: 1, title: "Public Photo", isPremium: false, creator: { id: 1 } },
+      { id: 2, title: "Premium Photo", isPremium: true, creator: { id: 1 } },
+    ]
+
+    it("should return all photos for creator", async () => {
+      const creatorId = 1
+      const requesterId = 1 // Same as creator
+
+      mockPhotoRepository.find.mockResolvedValue(mockPhotos)
+
+      const result = await service.getCreatorPhotos(creatorId, requesterId)
+
+      expect(result.accessiblePhotos).toHaveLength(2)
+      expect(result.lockedPhotos).toHaveLength(0)
+      expect(result.hasSubscription).toBeTruthy()
+    })
+
+    it("should return mixed content for subscribers", async () => {
+      const creatorId = 1
+      const requesterId = 2 // Different user
+
+      mockPhotoRepository.find.mockResolvedValue(mockPhotos)
+      mockSubscriptionsService.hasActiveSubscription.mockResolvedValue(true)
+
+      const result = await service.getCreatorPhotos(creatorId, requesterId)
+
+      expect(result.accessiblePhotos).toHaveLength(2)
+      expect(result.lockedPhotos).toHaveLength(0)
+      expect(result.hasSubscription).toBeTruthy()
+    })
+
+    it("should return locked content for non-subscribers", async () => {
+      const creatorId = 1
+      const requesterId = 2 // Different user
+
+      mockPhotoRepository.find.mockResolvedValue(mockPhotos)
+      mockSubscriptionsService.hasActiveSubscription.mockResolvedValue(false)
+
+      const result = await service.getCreatorPhotos(creatorId, requesterId)
+
+      expect(result.accessiblePhotos).toHaveLength(1) // Only public photo
+      expect(result.lockedPhotos).toHaveLength(1) // Premium photo locked
+      expect(result.hasSubscription).toBeFalsy()
+      expect(result.lockedPhotos[0].isLocked).toBeTruthy()
+    })
+
+    it("should return only public photos for anonymous users", async () => {
+      const creatorId = 1
+
+      mockPhotoRepository.find.mockResolvedValue(mockPhotos)
+
+      const result = await service.getCreatorPhotos(creatorId)
+
+      expect(result.accessiblePhotos).toHaveLength(1) // Only public photo
+      expect(result.lockedPhotos).toHaveLength(1) // Premium photo locked
+      expect(result.hasSubscription).toBeFalsy()
+    })
+  })
+
+  describe("toggleLike", () => {
+    it("should create like when not exists", async () => {
+      const userId = 1
+      const photoId = 1
+      const mockLike = { id: 1, user: { id: userId }, photo: { id: photoId } }
+
+      mockLikeRepository.findOne.mockResolvedValue(null)
+      mockLikeRepository.create.mockReturnValue(mockLike)
+      mockLikeRepository.save.mockResolvedValue(mockLike)
+      mockLikeRepository.count.mockResolvedValue(1)
+
+      const result = await service.toggleLike(userId, photoId)
+
+      expect(result.liked).toBeTruthy()
+      expect(result.likeCount).toBe(1)
+      expect(mockLikeRepository.create).toHaveBeenCalledWith({
+        user: { id: userId },
+        photo: { id: photoId },
+      })
+    })
+
+    it("should remove like when exists", async () => {
+      const userId = 1
+      const photoId = 1
+      const existingLike = {
+        id: 1,
+        user: { id: userId },
+        photo: { id: photoId },
+      }
+
+      mockLikeRepository.findOne.mockResolvedValue(existingLike)
+      mockLikeRepository.remove.mockResolvedValue(existingLike)
+      mockLikeRepository.count.mockResolvedValue(0)
+
+      const result = await service.toggleLike(userId, photoId)
+
+      expect(result.liked).toBeFalsy()
+      expect(result.likeCount).toBe(0)
+      expect(mockLikeRepository.remove).toHaveBeenCalledWith(existingLike)
+    })
+  })
+
+  describe("addComment", () => {
+    it("should create new comment successfully", async () => {
+      const userId = 1
+      const photoId = 1
+      const content = "Great photo!"
+      const mockComment = {
+        id: 1,
+        content,
+        user: { id: userId },
+        photo: { id: photoId },
+        createdAt: new Date(),
+      }
+
+      mockCommentRepository.create.mockReturnValue(mockComment)
+      mockCommentRepository.save.mockResolvedValue(mockComment)
+
+      const result = await service.addComment(userId, photoId, content)
+
+      expect(result).toEqual(mockComment)
+      expect(mockCommentRepository.create).toHaveBeenCalledWith({
+        content,
+        user: { id: userId },
+        photo: { id: photoId },
+      })
+    })
+  })
+
+  describe("deleteComment", () => {
+    it("should delete comment successfully when user owns it", async () => {
+      const userId = 1
+      const commentId = 1
+      const photoId = 1
+      const mockComment = {
+        id: commentId,
+        user: { id: userId },
+        photo: { id: photoId },
+      }
+
+      mockCommentRepository.findOne.mockResolvedValue(mockComment)
+      mockCommentRepository.remove.mockResolvedValue(mockComment)
+
+      await service.deleteComment(userId, photoId, commentId)
+
+      expect(mockCommentRepository.remove).toHaveBeenCalledWith(mockComment)
+    })
+
+    it("should throw NotFoundException when comment not found", async () => {
+      const userId = 1
+      const commentId = 999
+      const photoId = 1
+
+      mockCommentRepository.findOne.mockResolvedValue(null)
+
+      await expect(
+        service.deleteComment(userId, photoId, commentId)
+      ).rejects.toThrow(NotFoundException)
+    })
+
+    it("should throw error when user does not own comment", async () => {
+      const userId = 1
+      const commentId = 1
+      const photoId = 1
+      const mockComment = {
+        id: commentId,
+        user: { id: 2 }, // Different user
+        photo: { id: photoId },
+      }
+
+      mockCommentRepository.findOne.mockResolvedValue(mockComment)
+
+      await expect(
+        service.deleteComment(userId, photoId, commentId)
+      ).rejects.toThrow("You can only delete your own comments")
+    })
+  })
+
+  describe("getLikeCount", () => {
+    it("should return correct like count", async () => {
+      const photoId = 1
+      mockLikeRepository.count.mockResolvedValue(5)
+
+      const result = await service.getLikeCount(photoId)
+
+      expect(result).toBe(5)
+      expect(mockLikeRepository.count).toHaveBeenCalledWith({
+        where: { photo: { id: photoId } },
+      })
+    })
+  })
+
+  describe("getComments", () => {
+    it("should return photo comments with user info", async () => {
+      const photoId = 1
+      const mockComments = [
+        {
+          id: 1,
+          content: "Great!",
+          user: { id: 1, email: "user1@example.com" },
+          createdAt: new Date(),
+        },
+        {
+          id: 2,
+          content: "Amazing!",
+          user: { id: 2, email: "user2@example.com" },
+          createdAt: new Date(),
+        },
+      ]
+
+      mockCommentRepository.find.mockResolvedValue(mockComments)
+
+      const result = await service.getComments(photoId)
+
+      expect(result).toEqual(mockComments)
+      expect(mockCommentRepository.find).toHaveBeenCalledWith({
+        where: { photo: { id: photoId } },
+        relations: ["user"],
+        order: { createdAt: "DESC" },
+      })
+    })
+  })
+})
+```
+
+#### 3. Controller Tests
 
 **Auth Controller Tests** (`src/auth/auth.controller.spec.ts`):
 
@@ -846,11 +1161,263 @@ describe("LoginComponent", () => {
 })
 ```
 
-#### 2. Service Tests
+#### 2. PhotoInteractions Component Tests
+
+**PhotoInteractions Component Tests** (`src/app/shared/components/photo-interactions/photo-interactions.component.spec.ts`):
+
+```typescript
+import { ComponentFixture, TestBed } from "@angular/core/testing"
+import { ReactiveFormsModule, FormsModule } from "@angular/forms"
+import { CommonModule } from "@angular/common"
+import { of, throwError } from "rxjs"
+import { PhotoInteractionsComponent } from "./photo-interactions.component"
+import { PhotoService } from "../../../core/services/photo.service"
+import { AuthService } from "../../../core/services/auth.service"
+
+describe("PhotoInteractionsComponent", () => {
+  let component: PhotoInteractionsComponent
+  let fixture: ComponentFixture<PhotoInteractionsComponent>
+  let photoService: jasmine.SpyObj<PhotoService>
+  let authService: jasmine.SpyObj<AuthService>
+
+  const mockComments = [
+    {
+      id: 1,
+      content: "Great photo!",
+      user: { id: 1, email: "user1@example.com" },
+      createdAt: new Date(),
+    },
+    {
+      id: 2,
+      content: "Amazing work!",
+      user: { id: 2, email: "user2@example.com" },
+      createdAt: new Date(),
+    },
+  ]
+
+  beforeEach(async () => {
+    const photoServiceSpy = jasmine.createSpyObj("PhotoService", [
+      "getLikes",
+      "toggleLike",
+      "getComments",
+      "addComment",
+      "deleteComment",
+    ])
+    const authServiceSpy = jasmine.createSpyObj("AuthService", [
+      "getCurrentUser",
+    ])
+
+    await TestBed.configureTestingModule({
+      imports: [
+        PhotoInteractionsComponent,
+        CommonModule,
+        ReactiveFormsModule,
+        FormsModule,
+      ],
+      providers: [
+        { provide: PhotoService, useValue: photoServiceSpy },
+        { provide: AuthService, useValue: authServiceSpy },
+      ],
+    }).compileComponents()
+
+    fixture = TestBed.createComponent(PhotoInteractionsComponent)
+    component = fixture.componentInstance
+    photoService = TestBed.inject(PhotoService) as jasmine.SpyObj<PhotoService>
+    authService = TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>
+
+    // Set required inputs
+    component.photoId = 1
+    component.currentUserId = 1
+
+    // Mock service responses
+    photoService.getLikes.and.returnValue(
+      of({ likeCount: 5, userHasLiked: false })
+    )
+    photoService.getComments.and.returnValue(of(mockComments))
+    authService.getCurrentUser.and.returnValue({
+      id: 1,
+      email: "test@example.com",
+    } as any)
+  })
+
+  it("should create", () => {
+    expect(component).toBeTruthy()
+  })
+
+  it("should load initial data on init", () => {
+    component.ngOnInit()
+
+    expect(photoService.getLikes).toHaveBeenCalledWith(1)
+    expect(photoService.getComments).toHaveBeenCalledWith(1)
+    expect(component.likeCount).toBe(5)
+    expect(component.liked).toBeFalsy()
+    expect(component.comments).toEqual(mockComments)
+  })
+
+  describe("toggleLike", () => {
+    it("should toggle like successfully", async () => {
+      const toggleResponse = { liked: true, likeCount: 6 }
+      photoService.toggleLike.and.returnValue(of(toggleResponse))
+
+      await component.toggleLike()
+
+      expect(photoService.toggleLike).toHaveBeenCalledWith(1)
+      expect(component.liked).toBeTruthy()
+      expect(component.likeCount).toBe(6)
+    })
+
+    it("should handle like toggle error", async () => {
+      photoService.toggleLike.and.returnValue(
+        throwError(() => new Error("Like failed"))
+      )
+      spyOn(console, "error")
+
+      await component.toggleLike()
+
+      expect(console.error).toHaveBeenCalledWith(
+        "Error toggling like:",
+        jasmine.any(Error)
+      )
+    })
+
+    it("should not toggle like if user not authenticated", async () => {
+      component.currentUserId = undefined
+
+      await component.toggleLike()
+
+      expect(photoService.toggleLike).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("addComment", () => {
+    beforeEach(() => {
+      component.comments = [...mockComments]
+      component.newComment = "New test comment"
+    })
+
+    it("should add comment successfully", async () => {
+      const newComment = {
+        id: 3,
+        content: "New test comment",
+        user: { id: 1, email: "test@example.com" },
+        createdAt: new Date(),
+      }
+      photoService.addComment.and.returnValue(of(newComment))
+
+      await component.addComment()
+
+      expect(photoService.addComment).toHaveBeenCalledWith(
+        1,
+        "New test comment"
+      )
+      expect(component.comments).toContain(newComment)
+      expect(component.newComment).toBe("")
+    })
+
+    it("should not add empty comment", async () => {
+      component.newComment = "   "
+
+      await component.addComment()
+
+      expect(photoService.addComment).not.toHaveBeenCalled()
+    })
+
+    it("should handle comment add error", async () => {
+      photoService.addComment.and.returnValue(
+        throwError(() => new Error("Comment failed"))
+      )
+      spyOn(console, "error")
+
+      await component.addComment()
+
+      expect(console.error).toHaveBeenCalledWith(
+        "Error adding comment:",
+        jasmine.any(Error)
+      )
+    })
+  })
+
+  describe("deleteComment", () => {
+    beforeEach(() => {
+      component.comments = [...mockComments]
+    })
+
+    it("should delete comment successfully", async () => {
+      photoService.deleteComment.and.returnValue(of(void 0))
+
+      await component.deleteComment(1)
+
+      expect(photoService.deleteComment).toHaveBeenCalledWith(1, 1)
+      expect(component.comments.length).toBe(1)
+      expect(component.comments.find((c) => c.id === 1)).toBeUndefined()
+    })
+
+    it("should handle delete comment error", async () => {
+      photoService.deleteComment.and.returnValue(
+        throwError(() => new Error("Delete failed"))
+      )
+      spyOn(console, "error")
+
+      await component.deleteComment(1)
+
+      expect(console.error).toHaveBeenCalledWith(
+        "Error deleting comment:",
+        jasmine.any(Error)
+      )
+      expect(component.comments.length).toBe(2) // Should remain unchanged
+    })
+  })
+
+  describe("canDeleteComment", () => {
+    it("should return true if user owns the comment", () => {
+      const comment = { id: 1, user: { id: 1 } } as any
+      component.currentUserId = 1
+
+      expect(component.canDeleteComment(comment)).toBeTruthy()
+    })
+
+    it("should return false if user does not own the comment", () => {
+      const comment = { id: 1, user: { id: 2 } } as any
+      component.currentUserId = 1
+
+      expect(component.canDeleteComment(comment)).toBeFalsy()
+    })
+
+    it("should return false if no current user", () => {
+      const comment = { id: 1, user: { id: 1 } } as any
+      component.currentUserId = undefined
+
+      expect(component.canDeleteComment(comment)).toBeFalsy()
+    })
+  })
+
+  describe("getLikeButtonClass", () => {
+    it("should return liked class when user has liked", () => {
+      component.liked = true
+
+      const classes = component.getLikeButtonClass()
+
+      expect(classes).toContain("text-red-600")
+      expect(classes).toContain("bg-red-50")
+    })
+
+    it("should return default class when user has not liked", () => {
+      component.liked = false
+
+      const classes = component.getLikeButtonClass()
+
+      expect(classes).toContain("text-gray-600")
+      expect(classes).toContain("bg-gray-50")
+    })
+  })
+})
+```
+
+#### 3. Service Tests
 
 **Auth Service Tests** (`src/app/core/services/auth.service.spec.ts`):
 
-```typescript
+````typescript
 import { TestBed } from "@angular/core/testing"
 import {
   HttpClientTestingModule,
@@ -989,7 +1556,199 @@ describe("AuthService", () => {
     })
   })
 })
-```
+
+**Photo Service Tests** (`src/app/core/services/photo.service.spec.ts`):
+
+```typescript
+import { TestBed } from '@angular/core/testing'
+import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing'
+import { PhotoService } from './photo.service'
+import { Photo, Comment, CreatorContentAccess } from '../models'
+
+describe('PhotoService', () => {
+  let service: PhotoService
+  let httpMock: HttpTestingController
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [PhotoService]
+    })
+
+    service = TestBed.inject(PhotoService)
+    httpMock = TestBed.inject(HttpTestingController)
+  })
+
+  afterEach(() => {
+    httpMock.verify()
+  })
+
+  describe('getCreatorPhotos', () => {
+    it('should fetch creator photos with subscription access', () => {
+      const mockResponse: CreatorContentAccess = {
+        accessiblePhotos: [
+          { id: 1, title: 'Public Photo', isPremium: false } as Photo,
+          { id: 2, title: 'Premium Photo', isPremium: true } as Photo
+        ],
+        lockedPhotos: [],
+        hasSubscription: true
+      }
+
+      service.getCreatorPhotos(1).subscribe(response => {
+        expect(response).toEqual(mockResponse)
+        expect(response.accessiblePhotos.length).toBe(2)
+        expect(response.hasSubscription).toBeTruthy()
+      })
+
+      const req = httpMock.expectOne('http://localhost:3000/photos/creator/1')
+      expect(req.request.method).toBe('GET')
+      req.flush(mockResponse)
+    })
+
+    it('should return locked content for non-subscribers', () => {
+      const mockResponse: CreatorContentAccess = {
+        accessiblePhotos: [
+          { id: 1, title: 'Public Photo', isPremium: false } as Photo
+        ],
+        lockedPhotos: [
+          {
+            id: 2,
+            thumbnailUrl: '/assets/locked-thumbnail.jpg',
+            isLocked: true,
+            description: 'Premium content - Subscribe to view'
+          }
+        ],
+        hasSubscription: false
+      }
+
+      service.getCreatorPhotos(1).subscribe(response => {
+        expect(response.accessiblePhotos.length).toBe(1)
+        expect(response.lockedPhotos.length).toBe(1)
+        expect(response.hasSubscription).toBeFalsy()
+      })
+
+      const req = httpMock.expectOne('http://localhost:3000/photos/creator/1')
+      req.flush(mockResponse)
+    })
+  })
+
+  describe('toggleLike', () => {
+    it('should toggle like successfully', () => {
+      const mockResponse = { liked: true, likeCount: 5 }
+
+      service.toggleLike(1).subscribe(response => {
+        expect(response).toEqual(mockResponse)
+        expect(response.liked).toBeTruthy()
+        expect(response.likeCount).toBe(5)
+      })
+
+      const req = httpMock.expectOne('http://localhost:3000/photos/1/like')
+      expect(req.request.method).toBe('POST')
+      expect(req.request.body).toEqual({})
+      req.flush(mockResponse)
+    })
+  })
+
+  describe('getLikes', () => {
+    it('should fetch like information', () => {
+      const mockResponse = { likeCount: 10, userHasLiked: true }
+
+      service.getLikes(1).subscribe(response => {
+        expect(response).toEqual(mockResponse)
+      })
+
+      const req = httpMock.expectOne('http://localhost:3000/photos/1/likes')
+      expect(req.request.method).toBe('GET')
+      req.flush(mockResponse)
+    })
+  })
+
+  describe('getComments', () => {
+    it('should fetch photo comments', () => {
+      const mockComments: Comment[] = [
+        {
+          id: 1,
+          content: 'Great photo!',
+          user: { id: 1, email: 'user1@example.com' },
+          createdAt: new Date()
+        } as Comment,
+        {
+          id: 2,
+          content: 'Amazing work!',
+          user: { id: 2, email: 'user2@example.com' },
+          createdAt: new Date()
+        } as Comment
+      ]
+
+      service.getComments(1).subscribe(comments => {
+        expect(comments).toEqual(mockComments)
+        expect(comments.length).toBe(2)
+      })
+
+      const req = httpMock.expectOne('http://localhost:3000/photos/1/comments')
+      expect(req.request.method).toBe('GET')
+      req.flush(mockComments)
+    })
+  })
+
+  describe('addComment', () => {
+    it('should add new comment', () => {
+      const commentContent = 'New comment'
+      const mockComment: Comment = {
+        id: 3,
+        content: commentContent,
+        user: { id: 1, email: 'test@example.com' },
+        createdAt: new Date()
+      } as Comment
+
+      service.addComment(1, commentContent).subscribe(comment => {
+        expect(comment).toEqual(mockComment)
+        expect(comment.content).toBe(commentContent)
+      })
+
+      const req = httpMock.expectOne('http://localhost:3000/photos/1/comments')
+      expect(req.request.method).toBe('POST')
+      expect(req.request.body).toEqual({ content: commentContent })
+      req.flush(mockComment)
+    })
+  })
+
+  describe('deleteComment', () => {
+    it('should delete comment successfully', () => {
+      service.deleteComment(1, 2).subscribe()
+
+      const req = httpMock.expectOne('http://localhost:3000/photos/1/comments/2')
+      expect(req.request.method).toBe('DELETE')
+      req.flush(null)
+    })
+  })
+
+  describe('uploadPhoto', () => {
+    it('should upload photo with form data', () => {
+      const file = new File([''], 'test.jpg', { type: 'image/jpeg' })
+      const photoData = {
+        description: 'Test photo',
+        isPremium: true
+      }
+      const mockPhoto: Photo = {
+        id: 1,
+        url: '/uploads/test.jpg',
+        description: 'Test photo',
+        isPremium: true
+      } as Photo
+
+      service.uploadPhoto(file, photoData).subscribe(photo => {
+        expect(photo).toEqual(mockPhoto)
+      })
+
+      const req = httpMock.expectOne('http://localhost:3000/photos/upload')
+      expect(req.request.method).toBe('POST')
+      expect(req.request.body instanceof FormData).toBeTruthy()
+      req.flush(mockPhoto)
+    })
+  })
+})
+````
 
 #### 3. Guard Tests
 
@@ -1330,7 +2089,230 @@ describe("Photo Management", () => {
 })
 ```
 
-#### 3. Subscription Flow
+#### 3. Like and Comment Functionality
+
+**Social Features E2E Tests** (`cypress/e2e/social-features.cy.ts`):
+
+```typescript
+describe("Like and Comment Functionality", () => {
+  beforeEach(() => {
+    cy.login("testuser", "Password123!")
+  })
+
+  describe("Photo Likes", () => {
+    beforeEach(() => {
+      // Create test photo
+      cy.createTestPhoto("testcreator", {
+        title: "Test Photo for Likes",
+        description: "Testing like functionality",
+        isPremium: false,
+      })
+    })
+
+    it("should like and unlike a photo", () => {
+      cy.visit("/gallery")
+
+      // Initial state - not liked
+      cy.get('[data-cy="photo-card"]')
+        .first()
+        .within(() => {
+          cy.get('[data-cy="like-button"]').should(
+            "not.have.class",
+            "text-red-600"
+          )
+          cy.get('[data-cy="like-count"]').should("contain", "0")
+
+          // Click like
+          cy.get('[data-cy="like-button"]').click()
+
+          // Should be liked now
+          cy.get('[data-cy="like-button"]').should("have.class", "text-red-600")
+          cy.get('[data-cy="like-count"]').should("contain", "1")
+
+          // Click unlike
+          cy.get('[data-cy="like-button"]').click()
+
+          // Should be unliked
+          cy.get('[data-cy="like-button"]').should(
+            "not.have.class",
+            "text-red-600"
+          )
+          cy.get('[data-cy="like-count"]').should("contain", "0")
+        })
+    })
+
+    it("should show correct like count with multiple users", () => {
+      // Like photo with first user
+      cy.visit("/gallery")
+      cy.get('[data-cy="photo-card"]')
+        .first()
+        .within(() => {
+          cy.get('[data-cy="like-button"]').click()
+          cy.get('[data-cy="like-count"]').should("contain", "1")
+        })
+
+      // Login as different user and like same photo
+      cy.logout()
+      cy.login("anotheruser", "Password123!")
+      cy.visit("/gallery")
+
+      cy.get('[data-cy="photo-card"]')
+        .first()
+        .within(() => {
+          cy.get('[data-cy="like-count"]').should("contain", "1")
+          cy.get('[data-cy="like-button"]').click()
+          cy.get('[data-cy="like-count"]').should("contain", "2")
+        })
+    })
+  })
+
+  describe("Photo Comments", () => {
+    beforeEach(() => {
+      cy.createTestPhoto("testcreator", {
+        title: "Test Photo for Comments",
+        description: "Testing comment functionality",
+        isPremium: false,
+      })
+    })
+
+    it("should add and display comments", () => {
+      cy.visit("/gallery")
+
+      cy.get('[data-cy="photo-card"]').first().click()
+
+      // Add comment
+      cy.get('[data-cy="comment-input"]').type("This is a test comment!")
+      cy.get('[data-cy="comment-submit"]').click()
+
+      // Verify comment appears
+      cy.get('[data-cy="comment-item"]').should("have.length", 1)
+      cy.get('[data-cy="comment-content"]').should(
+        "contain",
+        "This is a test comment!"
+      )
+      cy.get('[data-cy="comment-author"]').should("contain", "testuser")
+
+      // Comment count should update
+      cy.get('[data-cy="comment-count"]').should("contain", "1")
+    })
+
+    it("should not submit empty comments", () => {
+      cy.visit("/gallery")
+      cy.get('[data-cy="photo-card"]').first().click()
+
+      // Try to submit empty comment
+      cy.get('[data-cy="comment-submit"]').should("be.disabled")
+
+      // Type spaces only
+      cy.get('[data-cy="comment-input"]').type("   ")
+      cy.get('[data-cy="comment-submit"]').should("be.disabled")
+    })
+
+    it("should allow users to delete their own comments", () => {
+      cy.visit("/gallery")
+      cy.get('[data-cy="photo-card"]').first().click()
+
+      // Add comment
+      cy.get('[data-cy="comment-input"]').type("Comment to be deleted")
+      cy.get('[data-cy="comment-submit"]').click()
+
+      // Delete comment
+      cy.get('[data-cy="comment-item"]').within(() => {
+        cy.get('[data-cy="delete-comment"]').click()
+      })
+
+      cy.get('[data-cy="confirm-delete"]').click()
+
+      // Comment should be removed
+      cy.get('[data-cy="comment-item"]').should("not.exist")
+      cy.get('[data-cy="comment-count"]').should("contain", "0")
+    })
+
+    it("should not show delete button for other users comments", () => {
+      // Add comment as first user
+      cy.visit("/gallery")
+      cy.get('[data-cy="photo-card"]').first().click()
+      cy.get('[data-cy="comment-input"]').type("Comment from first user")
+      cy.get('[data-cy="comment-submit"]').click()
+
+      // Login as different user
+      cy.logout()
+      cy.login("anotheruser", "Password123!")
+      cy.visit("/gallery")
+      cy.get('[data-cy="photo-card"]').first().click()
+
+      // Delete button should not be visible
+      cy.get('[data-cy="comment-item"]').within(() => {
+        cy.get('[data-cy="delete-comment"]').should("not.exist")
+      })
+    })
+
+    it("should display comments in chronological order", () => {
+      cy.visit("/gallery")
+      cy.get('[data-cy="photo-card"]').first().click()
+
+      // Add multiple comments
+      cy.get('[data-cy="comment-input"]').type("First comment")
+      cy.get('[data-cy="comment-submit"]').click()
+
+      cy.wait(1000) // Ensure different timestamps
+
+      cy.get('[data-cy="comment-input"]').type("Second comment")
+      cy.get('[data-cy="comment-submit"]').click()
+
+      cy.wait(1000)
+
+      cy.get('[data-cy="comment-input"]').type("Third comment")
+      cy.get('[data-cy="comment-submit"]').click()
+
+      // Verify order (newest first)
+      cy.get('[data-cy="comment-content"]')
+        .first()
+        .should("contain", "Third comment")
+      cy.get('[data-cy="comment-content"]')
+        .eq(1)
+        .should("contain", "Second comment")
+      cy.get('[data-cy="comment-content"]')
+        .eq(2)
+        .should("contain", "First comment")
+    })
+  })
+
+  describe("Combined Like and Comment Interactions", () => {
+    it("should handle likes and comments together", () => {
+      cy.createTestPhoto("testcreator", {
+        title: "Interactive Photo",
+        description: "Testing combined interactions",
+        isPremium: false,
+      })
+
+      cy.visit("/gallery")
+      cy.get('[data-cy="photo-card"]').first().click()
+
+      // Like the photo
+      cy.get('[data-cy="like-button"]').click()
+      cy.get('[data-cy="like-count"]').should("contain", "1")
+
+      // Add comment
+      cy.get('[data-cy="comment-input"]').type("Great photo! Liked it!")
+      cy.get('[data-cy="comment-submit"]').click()
+
+      // Both interactions should persist
+      cy.reload()
+
+      cy.get('[data-cy="like-button"]').should("have.class", "text-red-600")
+      cy.get('[data-cy="like-count"]').should("contain", "1")
+      cy.get('[data-cy="comment-item"]').should("have.length", 1)
+      cy.get('[data-cy="comment-content"]').should(
+        "contain",
+        "Great photo! Liked it!"
+      )
+    })
+  })
+})
+```
+
+#### 4. Subscription Flow
 
 **Subscription E2E Tests** (`cypress/e2e/subscriptions.cy.ts`):
 
@@ -1400,11 +2382,15 @@ declare global {
   namespace Cypress {
     interface Chainable {
       login(username: string, password: string): Chainable<void>
+      logout(): Chainable<void>
+      createTestPhoto(creatorUsername: string, photoData: any): Chainable<void>
       createTestPhotos(creatorUsername: string): Chainable<void>
       createTestSubscription(
         subscriber: string,
         creator: string
       ): Chainable<void>
+      likePhoto(photoId: number): Chainable<void>
+      addComment(photoId: number, content: string): Chainable<void>
     }
   }
 }
@@ -1422,6 +2408,20 @@ Cypress.Commands.add("login", (username: string, password: string) => {
     window.localStorage.setItem("user", JSON.stringify(response.body.user))
   })
 })
+
+Cypress.Commands.add(
+  "createTestPhoto",
+  (creatorUsername: string, photoData: any) => {
+    cy.request({
+      method: "POST",
+      url: `${Cypress.env("apiUrl")}/photos`,
+      headers: {
+        Authorization: `Bearer ${window.localStorage.getItem("token")}`,
+      },
+      body: photoData,
+    })
+  }
+)
 
 Cypress.Commands.add("createTestPhotos", (creatorUsername: string) => {
   cy.request({
@@ -1452,6 +2452,36 @@ Cypress.Commands.add("createTestPhotos", (creatorUsername: string) => {
       price: 19.99,
     },
   })
+})
+
+Cypress.Commands.add("likePhoto", (photoId: number) => {
+  cy.request({
+    method: "POST",
+    url: `${Cypress.env("apiUrl")}/photos/${photoId}/like`,
+    headers: {
+      Authorization: `Bearer ${window.localStorage.getItem("token")}`,
+    },
+    body: {},
+  })
+})
+
+Cypress.Commands.add("addComment", (photoId: number, content: string) => {
+  cy.request({
+    method: "POST",
+    url: `${Cypress.env("apiUrl")}/photos/${photoId}/comments`,
+    headers: {
+      Authorization: `Bearer ${window.localStorage.getItem("token")}`,
+    },
+    body: { content },
+  })
+})
+
+Cypress.Commands.add("logout", () => {
+  cy.window().then((win) => {
+    win.localStorage.removeItem("token")
+    win.localStorage.removeItem("user")
+  })
+  cy.visit("/")
 })
 ```
 
@@ -1522,6 +2552,30 @@ scenarios:
           url: "/photos"
           headers:
             Authorization: "Bearer {{ token }}"
+
+  - name: "Social Interactions"
+    weight: 30
+    flow:
+      - function: "authenticate"
+      - get:
+          url: "/photos/1/likes"
+          headers:
+            Authorization: "Bearer {{ token }}"
+      - post:
+          url: "/photos/1/like"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          json: {}
+      - get:
+          url: "/photos/1/comments"
+          headers:
+            Authorization: "Bearer {{ token }}"
+      - post:
+          url: "/photos/1/comments"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          json:
+            content: "Performance test comment {{ $randomString() }}"
 
   - name: "Subscription Operations"
     weight: 20

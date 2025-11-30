@@ -141,6 +141,55 @@ export class User {
 
 #### 3. Photo Management Module (`/photos`)
 
+**Entity Definitions**:
+
+```typescript
+// Like Entity for photo interactions
+@Entity()
+export class Like {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_id' })
+  user: User;
+
+  @ManyToOne(() => Photo, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'photo_id' })
+  photo: Photo;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  // Unique constraint to prevent duplicate likes
+  @Unique(['user', 'photo'])
+}
+
+// Comment Entity for photo interactions
+@Entity()
+export class Comment {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column('text')
+  content: string;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_id' })
+  user: User;
+
+  @ManyToOne(() => Photo, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'photo_id' })
+  photo: Photo;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+}
+```
+
 **File Upload Configuration**:
 
 ```typescript
@@ -173,29 +222,81 @@ export class User {
 **Access Control Logic**:
 
 ```typescript
-async getAccessiblePhotos(userId: number): Promise<Photo[]> {
-  // Get all public photos
-  const publicPhotos = await this.photosRepository.find({
-    where: { isPremium: false },
+// Enhanced photo access with subscription gating
+async getCreatorPhotos(creatorId: number, requesterId?: number): Promise<CreatorContentAccess> {
+  const allPhotos = await this.photosRepository.find({
+    where: { creator: { id: creatorId } },
+    relations: ['creator', 'likes', 'comments'],
+    order: { createdAt: 'DESC' },
   });
 
-  // Get premium photos uploaded by this user (if creator)
-  const ownPremiumPhotos = await this.photosRepository.find({
-    where: { creator: { id: userId }, isPremium: true },
-  });
-
-  // Get premium photos from creators the user is subscribed to
-  const creatorIds = await this.subscriptionsService.getSubscribedCreatorIds(userId);
-  let subscribedPremiumPhotos: Photo[] = [];
-  if (creatorIds.length > 0) {
-    subscribedPremiumPhotos = await this.photosRepository
-      .createQueryBuilder('photo')
-      .where('photo.isPremium = :isPremium', { isPremium: true })
-      .andWhere('photo.creator IN (:...creatorIds)', { creatorIds })
-      .getMany();
+  // If no requester, return only public photos
+  if (!requesterId) {
+    return {
+      accessiblePhotos: allPhotos.filter(photo => !photo.isPremium),
+      lockedPhotos: allPhotos.filter(photo => photo.isPremium).map(photo => ({
+        id: photo.id,
+        thumbnailUrl: '/assets/locked-thumbnail.jpg',
+        isLocked: true,
+        description: 'Premium content - Subscribe to view'
+      })),
+      hasSubscription: false
+    };
   }
 
-  return [...publicPhotos, ...ownPremiumPhotos, ...subscribedPremiumPhotos];
+  // Check if requester is creator or subscriber
+  const isCreator = requesterId === creatorId;
+  const hasSubscription = isCreator ||
+    await this.subscriptionsService.hasActiveSubscription(requesterId, creatorId);
+
+  if (hasSubscription) {
+    return {
+      accessiblePhotos: allPhotos,
+      lockedPhotos: [],
+      hasSubscription: true
+    };
+  }
+
+  // Return mixed content for non-subscribers
+  return {
+    accessiblePhotos: allPhotos.filter(photo => !photo.isPremium),
+    lockedPhotos: allPhotos.filter(photo => photo.isPremium).map(photo => ({
+      id: photo.id,
+      thumbnailUrl: '/assets/locked-thumbnail.jpg',
+      isLocked: true,
+      description: 'Premium content - Subscribe to view'
+    })),
+    hasSubscription: false
+  };
+}
+
+// Like management endpoints
+async toggleLike(userId: number, photoId: number): Promise<{ liked: boolean; likeCount: number }> {
+  const existingLike = await this.likesRepository.findOne({
+    where: { user: { id: userId }, photo: { id: photoId } }
+  });
+
+  if (existingLike) {
+    await this.likesRepository.remove(existingLike);
+    return { liked: false, likeCount: await this.getLikeCount(photoId) };
+  } else {
+    const like = this.likesRepository.create({
+      user: { id: userId },
+      photo: { id: photoId }
+    });
+    await this.likesRepository.save(like);
+    return { liked: true, likeCount: await this.getLikeCount(photoId) };
+  }
+}
+
+// Comment management
+async addComment(userId: number, photoId: number, content: string): Promise<Comment> {
+  const comment = this.commentsRepository.create({
+    content,
+    user: { id: userId },
+    photo: { id: photoId }
+  });
+  return await this.commentsRepository.save(comment);
 }
 ```
 
@@ -305,19 +406,238 @@ CREATE TABLE subscriptions (
     UNIQUE(subscriber_id, creator_id)
 );
 
+-- Likes for photo interactions
+CREATE TABLE likes (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    photo_id INTEGER NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_likes_user FOREIGN KEY (user_id) REFERENCES users(id),
+    CONSTRAINT fk_likes_photo FOREIGN KEY (photo_id) REFERENCES photos(id),
+    UNIQUE(user_id, photo_id)
+);
+
+-- Comments for photo interactions
+CREATE TABLE comments (
+    id SERIAL PRIMARY KEY,
+    content TEXT NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    photo_id INTEGER NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_comments_user FOREIGN KEY (user_id) REFERENCES users(id),
+    CONSTRAINT fk_comments_photo FOREIGN KEY (photo_id) REFERENCES photos(id)
+);
+
 -- Indexes for performance
 CREATE INDEX idx_photos_creator_id ON photos(creator_id);
 CREATE INDEX idx_photos_is_premium ON photos(is_premium);
 CREATE INDEX idx_subscriptions_subscriber_id ON subscriptions(subscriber_id);
 CREATE INDEX idx_subscriptions_creator_id ON subscriptions(creator_id);
 CREATE INDEX idx_subscriptions_status ON subscriptions(status);
+CREATE INDEX idx_likes_user_id ON likes(user_id);
+CREATE INDEX idx_likes_photo_id ON likes(photo_id);
+CREATE INDEX idx_comments_user_id ON comments(user_id);
+CREATE INDEX idx_comments_photo_id ON comments(photo_id);
+CREATE INDEX idx_comments_created_at ON comments(created_at);
 ```
 
 ## 🎨 Frontend Implementation Details
 
 ### Component Architecture
 
-#### 1. Authentication Flow
+#### 1. Social Interaction Components
+
+**PhotoInteractionsComponent**:
+
+```typescript
+@Component({
+  selector: "app-photo-interactions",
+  standalone: true,
+  imports: [CommonModule, ReactiveFormsModule, FormsModule],
+  template: `
+    <!-- Like and Comment Interface -->
+    <div class="space-y-4">
+      <!-- Like Button -->
+      <div class="flex items-center space-x-2">
+        <button
+          (click)="toggleLike()"
+          [class]="getLikeButtonClass()"
+          class="flex items-center space-x-1 px-3 py-1 rounded-full transition-colors"
+        >
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path
+              d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"
+            />
+          </svg>
+          <span>{{ likeCount }}</span>
+        </button>
+      </div>
+
+      <!-- Comments Section -->
+      <div class="space-y-3">
+        <h4 class="font-medium text-gray-900">
+          Comments ({{ comments.length }})
+        </h4>
+
+        <!-- Comment Form -->
+        <form (ngSubmit)="addComment()" class="flex space-x-2">
+          <input
+            [(ngModel)]="newComment"
+            name="comment"
+            type="text"
+            placeholder="Add a comment..."
+            class="flex-1 border border-gray-300 rounded-lg px-3 py-2"
+          />
+          <button
+            type="submit"
+            [disabled]="!newComment.trim()"
+            class="btn-primary"
+          >
+            Post
+          </button>
+        </form>
+
+        <!-- Comments List -->
+        <div class="space-y-2 max-h-60 overflow-y-auto">
+          <div
+            *ngFor="let comment of comments"
+            class="flex justify-between items-start p-3 bg-gray-50 rounded-lg"
+          >
+            <div class="flex-1">
+              <p class="text-sm font-medium text-gray-900">
+                {{ comment.user.email }}
+              </p>
+              <p class="text-sm text-gray-600">{{ comment.content }}</p>
+              <p class="text-xs text-gray-400 mt-1">
+                {{ comment.createdAt | date : "short" }}
+              </p>
+            </div>
+            <button
+              *ngIf="canDeleteComment(comment)"
+              (click)="deleteComment(comment.id)"
+              class="text-red-600 hover:text-red-800 text-sm"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+})
+export class PhotoInteractionsComponent {
+  @Input() photoId!: number
+  @Input() currentUserId?: number
+
+  liked = false
+  likeCount = 0
+  comments: Comment[] = []
+  newComment = ""
+
+  constructor(private photoService: PhotoService) {}
+
+  ngOnInit() {
+    this.loadInteractions()
+  }
+
+  async toggleLike() {
+    if (!this.currentUserId) return
+
+    try {
+      const result = await this.photoService
+        .toggleLike(this.photoId)
+        .toPromise()
+      this.liked = result.liked
+      this.likeCount = result.likeCount
+    } catch (error) {
+      console.error("Error toggling like:", error)
+    }
+  }
+
+  async addComment() {
+    if (!this.newComment.trim() || !this.currentUserId) return
+
+    try {
+      const comment = await this.photoService
+        .addComment(this.photoId, this.newComment)
+        .toPromise()
+      this.comments.unshift(comment)
+      this.newComment = ""
+    } catch (error) {
+      console.error("Error adding comment:", error)
+    }
+  }
+}
+```
+
+**LockedContentCardComponent**:
+
+```typescript
+@Component({
+  selector: "app-locked-content-card",
+  standalone: true,
+  imports: [CommonModule],
+  template: `
+    <div
+      class="relative overflow-hidden rounded-lg bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 shadow-lg"
+    >
+      <!-- Locked Content Overlay -->
+      <div class="aspect-square flex items-center justify-center p-6">
+        <div class="text-center text-white">
+          <!-- Lock Icon -->
+          <svg
+            class="w-16 h-16 mx-auto mb-4 opacity-90"
+            fill="currentColor"
+            viewBox="0 0 20 20"
+          >
+            <path
+              fill-rule="evenodd"
+              d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+              clip-rule="evenodd"
+            />
+          </svg>
+
+          <!-- Premium Badge -->
+          <div
+            class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-yellow-400 text-yellow-900 mb-3"
+          >
+            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <path
+                d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"
+              />
+            </svg>
+            PREMIUM
+          </div>
+
+          <!-- Content Description -->
+          <h3 class="text-lg font-semibold mb-2">Exclusive Content</h3>
+          <p class="text-sm opacity-90 mb-4">{{ description }}</p>
+
+          <!-- Subscribe Button -->
+          <button
+            (click)="onSubscribeClick()"
+            class="px-6 py-2 bg-white text-purple-600 font-semibold rounded-full hover:bg-gray-100 transition-colors"
+          >
+            Subscribe to View
+          </button>
+        </div>
+      </div>
+    </div>
+  `,
+})
+export class LockedContentCardComponent {
+  @Input() description = "Premium content - Subscribe to view"
+  @Input() creatorId!: number
+  @Output() subscribeClick = new EventEmitter<number>()
+
+  onSubscribeClick() {
+    this.subscribeClick.emit(this.creatorId)
+  }
+}
+```
+
+#### 2. Authentication Flow
 
 **Login Component**:
 
@@ -479,6 +799,57 @@ export class PhotoService {
 
   getPhotos(): Observable<Photo[]> {
     return this.http.get<Photo[]>(`${this.apiUrl}/list`)
+  }
+
+  // Enhanced creator content with subscription gating
+  getCreatorPhotos(creatorId: number): Observable<CreatorContentAccess> {
+    return this.http.get<CreatorContentAccess>(
+      `${this.apiUrl}/creator/${creatorId}`
+    )
+  }
+
+  // Like functionality
+  toggleLike(
+    photoId: number
+  ): Observable<{ liked: boolean; likeCount: number }> {
+    return this.http.post<{ liked: boolean; likeCount: number }>(
+      `${this.apiUrl}/${photoId}/like`,
+      {}
+    )
+  }
+
+  getLikes(
+    photoId: number
+  ): Observable<{ likeCount: number; userHasLiked: boolean }> {
+    return this.http.get<{ likeCount: number; userHasLiked: boolean }>(
+      `${this.apiUrl}/${photoId}/likes`
+    )
+  }
+
+  // Comment functionality
+  getComments(photoId: number): Observable<Comment[]> {
+    return this.http.get<Comment[]>(`${this.apiUrl}/${photoId}/comments`)
+  }
+
+  addComment(photoId: number, content: string): Observable<Comment> {
+    return this.http.post<Comment>(`${this.apiUrl}/${photoId}/comments`, {
+      content,
+    })
+  }
+
+  deleteComment(photoId: number, commentId: number): Observable<void> {
+    return this.http.delete<void>(
+      `${this.apiUrl}/${photoId}/comments/${commentId}`
+    )
+  }
+
+  // Photo management
+  deletePhoto(photoId: number): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${photoId}`)
+  }
+
+  updatePhoto(photoId: number, updates: Partial<Photo>): Observable<Photo> {
+    return this.http.patch<Photo>(`${this.apiUrl}/${photoId}`, updates)
   }
 }
 ```

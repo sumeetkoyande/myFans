@@ -6,7 +6,9 @@ This document provides comprehensive API documentation for the OnlyFans-like pla
 
 **Base URL**: `http://localhost:3000` (development) / `https://your-domain.com` (production)
 
-**API Version**: v1.0.0
+**API Version**: v1.2.0
+
+**New Features**: Like/Comment system, Subscription-gated content, Enhanced profile management
 
 ## 🔐 Authentication
 
@@ -156,7 +158,7 @@ Authorization: Bearer <jwt-token>
 
 #### Update User Profile
 
-Updates the authenticated user's profile.
+Updates the authenticated user's profile information.
 
 ```http
 PUT /users/profile
@@ -168,7 +170,70 @@ Content-Type: application/json
 
 ```json
 {
-  "isCreator": true
+  "name": "John Doe",
+  "bio": "Content creator and photographer",
+  "avatar": "https://example.com/avatar.jpg",
+  "profileImage": "https://example.com/profile.jpg"
+}
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "id": 1,
+  "email": "user@example.com",
+  "name": "John Doe",
+  "bio": "Content creator and photographer",
+  "avatar": "https://example.com/avatar.jpg",
+  "isCreator": true,
+  "isActive": true,
+  "createdAt": "2023-12-01T10:00:00.000Z"
+}
+```
+
+#### Change Password
+
+Changes the authenticated user's password.
+
+```http
+PUT /users/password
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body**:
+
+```json
+{
+  "currentPassword": "oldPassword123",
+  "newPassword": "newSecurePassword456"
+}
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "message": "Password updated successfully"
+}
+```
+
+#### Become Creator
+
+Upgrades a regular user to creator status.
+
+```http
+PUT /users/become-creator
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body**:
+
+```json
+{
+  "subscriptionPrice": 9.99
 }
 ```
 
@@ -179,7 +244,33 @@ Content-Type: application/json
   "id": 1,
   "email": "user@example.com",
   "isCreator": true,
+  "subscriptionPrice": 9.99,
   "isActive": true
+}
+```
+
+#### Get Creator Profile
+
+Returns public creator profile information.
+
+```http
+GET /users/creator/:id
+Authorization: Bearer <jwt-token>
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "id": 2,
+  "email": "creator@example.com",
+  "name": "Jane Creator",
+  "bio": "Professional photographer",
+  "avatar": "https://example.com/avatar.jpg",
+  "subscriptionPrice": 12.99,
+  "photoCount": 45,
+  "subscriberCount": 128,
+  "createdAt": "2023-11-01T00:00:00.000Z"
 }
 ```
 
@@ -367,6 +458,123 @@ Authorization: Bearer <jwt-token>
 }
 ```
 
+#### Get Creator Photos (Subscription-Gated)
+
+Returns creator's photos with access control based on subscription status.
+
+```http
+GET /photos/creator/:creatorId
+Authorization: Bearer <jwt-token>
+```
+
+**Response for Subscribers** (200 OK):
+
+```json
+{
+  "hasAccess": true,
+  "photos": [
+    {
+      "id": 1,
+      "url": "/uploads/photo1.jpg",
+      "description": "Premium content",
+      "isPremium": true,
+      "creator": {
+        "id": 2,
+        "email": "creator@example.com"
+      },
+      "createdAt": "2023-12-01T10:00:00.000Z"
+    }
+  ],
+  "publicPhotos": [],
+  "premiumPhotos": [],
+  "totalCount": 25,
+  "premiumCount": 20
+}
+```
+
+**Response for Non-Subscribers** (200 OK):
+
+```json
+{
+  "hasAccess": false,
+  "photos": [
+    {
+      "id": 1,
+      "url": "/uploads/preview1.jpg",
+      "description": "Free preview",
+      "isPremium": false,
+      "creator": {
+        "id": 2,
+        "email": "creator@example.com"
+      }
+    }
+  ],
+  "publicPhotos": [],
+  "premiumPhotos": [],
+  "totalCount": 25,
+  "premiumCount": 20,
+  "previewCount": 3
+}
+```
+
+#### Get My Photos
+
+Returns all photos uploaded by the authenticated creator.
+
+```http
+GET /photos/my/photos
+Authorization: Bearer <jwt-token>
+```
+
+**Response** (200 OK):
+
+```json
+[
+  {
+    "id": 1,
+    "url": "/uploads/photo1.jpg",
+    "description": "My latest work",
+    "isPremium": true,
+    "createdAt": "2023-12-01T10:00:00.000Z"
+  }
+]
+```
+
+#### Update Photo
+
+Updates photo details (creators can only update their own photos).
+
+```http
+PUT /photos/:id
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body**:
+
+```json
+{
+  "description": "Updated description",
+  "isPremium": false
+}
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "id": 1,
+  "url": "/uploads/photo1.jpg",
+  "description": "Updated description",
+  "isPremium": false,
+  "creator": {
+    "id": 2,
+    "email": "creator@example.com"
+  },
+  "updatedAt": "2023-12-01T11:00:00.000Z"
+}
+```
+
 #### Delete Photo
 
 Deletes a photo (creators can only delete their own photos).
@@ -376,7 +584,13 @@ DELETE /photos/:id
 Authorization: Bearer <jwt-token>
 ```
 
-**Response** (204 No Content)
+**Response** (200 OK):
+
+```json
+{
+  "message": "Photo deleted successfully"
+}
+```
 
 **Error Responses**:
 
@@ -386,6 +600,162 @@ Authorization: Bearer <jwt-token>
   "statusCode": 403,
   "message": "You can only delete your own photos",
   "error": "Forbidden"
+}
+```
+
+### Like & Comment Endpoints
+
+#### Like Photo
+
+Likes a photo (one like per user per photo).
+
+```http
+POST /photos/:id/like
+Authorization: Bearer <jwt-token>
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "message": "Photo liked successfully",
+  "isLiked": true
+}
+```
+
+**Error Responses**:
+
+```json
+// 400 Bad Request - Already liked
+{
+  "statusCode": 400,
+  "message": "Photo already liked",
+  "error": "Bad Request"
+}
+```
+
+#### Unlike Photo
+
+Removes a like from a photo.
+
+```http
+DELETE /photos/:id/like
+Authorization: Bearer <jwt-token>
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "message": "Photo unliked successfully",
+  "isLiked": false
+}
+```
+
+#### Get Photo Likes
+
+Returns all likes for a photo with user information.
+
+```http
+GET /photos/:id/likes
+Authorization: Bearer <jwt-token>
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "count": 15,
+  "likes": [
+    {
+      "id": 1,
+      "user": {
+        "id": 3,
+        "name": "John Doe",
+        "email": "john@example.com",
+        "avatar": "https://example.com/avatar.jpg"
+      },
+      "createdAt": "2023-12-01T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+#### Add Comment
+
+Adds a comment to a photo.
+
+```http
+POST /photos/:id/comment
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body**:
+
+```json
+{
+  "content": "Amazing photo! Love the composition."
+}
+```
+
+**Response** (201 Created):
+
+```json
+{
+  "id": 1,
+  "content": "Amazing photo! Love the composition.",
+  "user": {
+    "id": 3,
+    "name": "John Doe",
+    "email": "john@example.com"
+  },
+  "createdAt": "2023-12-01T10:00:00.000Z"
+}
+```
+
+#### Get Photo Comments
+
+Returns all comments for a photo.
+
+```http
+GET /photos/:id/comments
+Authorization: Bearer <jwt-token>
+```
+
+**Response** (200 OK):
+
+```json
+[
+  {
+    "id": 1,
+    "content": "Amazing photo!",
+    "user": {
+      "id": 3,
+      "name": "John Doe",
+      "email": "john@example.com",
+      "avatar": "https://example.com/avatar.jpg"
+    },
+    "createdAt": "2023-12-01T10:00:00.000Z",
+    "updatedAt": "2023-12-01T10:00:00.000Z"
+  }
+]
+```
+
+#### Delete Comment
+
+Deletes a comment (users can delete their own comments, creators can delete comments on their photos).
+
+```http
+DELETE /photos/comment/:commentId
+Authorization: Bearer <jwt-token>
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "message": "Comment deleted successfully"
 }
 ```
 
@@ -441,6 +811,77 @@ Authorization: Bearer <jwt-token>
     "status": "active"
   }
 ]
+```
+
+#### Unsubscribe from Creator
+
+Cancels a subscription to a creator.
+
+```http
+DELETE /subscriptions/:creatorId
+Authorization: Bearer <jwt-token>
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "message": "Successfully unsubscribed"
+}
+```
+
+#### Get Subscription Status
+
+Checks subscription status for a specific creator.
+
+```http
+GET /subscriptions/status/:creatorId
+Authorization: Bearer <jwt-token>
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "isSubscribed": true,
+  "subscriptionDate": "2023-12-01T00:00:00.000Z",
+  "creatorId": 2,
+  "nextBillingDate": "2024-01-01T00:00:00.000Z"
+}
+```
+
+#### Get Subscription Analytics
+
+Returns subscription analytics for creators.
+
+```http
+GET /subscriptions/analytics/overview
+Authorization: Bearer <jwt-token>
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "totalSubscribers": 128,
+  "newSubscribersThisMonth": 15,
+  "churnRate": 5.2,
+  "monthlyGrowth": [
+    { "month": "Jan", "subscribers": 78 },
+    { "month": "Feb", "subscribers": 95 },
+    { "month": "Mar", "subscribers": 110 },
+    { "month": "Apr", "subscribers": 118 },
+    { "month": "May", "subscribers": 128 }
+  ],
+  "topSubscribers": [
+    {
+      "id": 1,
+      "email": "subscriber@example.com",
+      "subscriptionDate": "2023-01-15T00:00:00.000Z",
+      "totalSpent": 119.88
+    }
+  ]
+}
 ```
 
 ### Payment Endpoints
@@ -500,6 +941,136 @@ Stripe-Signature: <stripe-signature>
 ```
 
 This endpoint is called by Stripe when payment events occur and should not be called directly by clients.
+
+#### Get Payment History
+
+Returns payment history for the authenticated user.
+
+```http
+GET /payments/history
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters**:
+
+- `status`: Filter by payment status (optional: completed, refunded, pending)
+- `type`: Filter by payment type (optional: subscription, tip)
+
+**Response** (200 OK):
+
+```json
+[
+  {
+    "id": 1,
+    "amount": 19.99,
+    "status": "completed",
+    "type": "subscription",
+    "description": "Monthly subscription to @creator1",
+    "date": "2023-12-01T10:00:00.000Z",
+    "creatorName": "Creator One",
+    "paymentMethod": "Credit Card ending in 1234"
+  }
+]
+```
+
+#### Request Refund
+
+Requests a refund for a specific payment.
+
+```http
+POST /payments/refund/:paymentId
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body**:
+
+```json
+{
+  "reason": "Not satisfied with content quality"
+}
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "message": "Refund request submitted for payment 123. Reason: Not satisfied with content quality"
+}
+```
+
+#### Get Creator Earnings
+
+Returns earnings analytics for creators.
+
+```http
+GET /payments/creator/earnings
+Authorization: Bearer <jwt-token>
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "totalEarnings": 2847.5,
+  "thisMonthEarnings": 485.25,
+  "availableForPayout": 1230.75,
+  "subscriberCount": 127,
+  "monthlyEarnings": [
+    { "month": "Jan", "earnings": 320.5 },
+    { "month": "Feb", "earnings": 285.25 },
+    { "month": "Mar", "earnings": 410.75 },
+    { "month": "Apr", "earnings": 525.0 },
+    { "month": "May", "earnings": 485.25 }
+  ],
+  "recentTransactions": [
+    {
+      "id": 101,
+      "amount": 19.99,
+      "type": "subscription",
+      "subscriberEmail": "user1@example.com",
+      "date": "2023-12-01T09:00:00.000Z"
+    }
+  ]
+}
+```
+
+#### Request Payout
+
+Requests a payout of available earnings.
+
+```http
+POST /payments/creator/payout
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body**:
+
+```json
+{
+  "amount": 500.0
+}
+```
+
+**Response** (200 OK):
+
+```json
+{
+  "message": "Payout request of $500 submitted successfully. Processing time: 2-5 business days."
+}
+```
+
+**Error Responses**:
+
+```json
+// 400 Bad Request - Minimum payout not met
+{
+  "statusCode": 400,
+  "message": "Minimum payout amount is $10",
+  "error": "Bad Request"
+}
+```
 
 ## 📊 Rate Limiting
 
@@ -752,7 +1323,24 @@ describe("API Integration Tests", () => {
 
 ## 📋 API Changelog
 
-### Version 1.0.0 (Current)
+### Version 1.2.0 (Current)
+
+- Enhanced user profile management (name, bio, avatar, password change)
+- Creator upgrade functionality with subscription pricing
+- Like and comment system for photos
+- Subscription-gated content access
+- Creator earnings dashboard and analytics
+- Payment history and refund system
+- Payout request functionality
+- Subscription analytics and management
+
+### Version 1.1.0
+
+- Basic photo likes and comments
+- Creator profile enhancements
+- Subscription management improvements
+
+### Version 1.0.0
 
 - Initial API release
 - User authentication and registration
@@ -760,13 +1348,14 @@ describe("API Integration Tests", () => {
 - Subscription system with Stripe integration
 - Role-based access control
 
-### Planned Features (v1.1.0)
+### Planned Features (v1.3.0)
 
-- Photo likes and comments
-- Creator earnings dashboard
 - Advanced search and filtering
-- Content reporting system
+- Content reporting and moderation system
 - Mobile app API endpoints
+- Push notifications
+- Content tagging and categories
+- Live streaming capabilities
 
 ---
 

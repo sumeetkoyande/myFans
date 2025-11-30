@@ -140,4 +140,64 @@ export class PhotosController {
   ) {
     return this.photosService.deletePhoto(id, req.user.userId);
   }
+
+  @Post(':id/like')
+  @Roles('user', 'creator')
+  async likePhoto(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.photosService.likePhoto(id, req.user.userId);
+  }
+
+  @Delete(':id/like')
+  @Roles('user', 'creator')
+  async unlikePhoto(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.photosService.unlikePhoto(id, req.user.userId);
+  }
+
+  @Get(':id/likes')
+  @Roles('user', 'creator')
+  async getPhotoLikes(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.photosService.getPhotoLikes(id);
+  }
+
+  @Post(':id/comment')
+  @Roles('user', 'creator')
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  async commentOnPhoto(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: AuthenticatedRequest,
+    @Body() commentData: { content: string },
+  ) {
+    return this.photosService.commentOnPhoto(
+      id,
+      req.user.userId,
+      commentData.content,
+    );
+  }
+
+  @Get(':id/comments')
+  @Roles('user', 'creator')
+  async getPhotoComments(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.photosService.getPhotoComments(id);
+  }
+
+  @Delete('comment/:commentId')
+  @Roles('user', 'creator')
+  async deleteComment(
+    @Param('commentId', ParseIntPipe) commentId: number,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.photosService.deleteComment(commentId, req.user.userId);
+  }
 }

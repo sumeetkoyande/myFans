@@ -1,16 +1,18 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { Creator, Photo, User } from '../../core/models';
+import { Creator, CreatorContentAccess, Photo, User } from '../../core/models';
 import { AuthService } from '../../core/services/auth.service';
 import { PaymentService } from '../../core/services/payment.service';
 import { PhotoService } from '../../core/services/photo.service';
 import { SubscriptionService } from '../../core/services/subscription.service';
+import { LockedContentCardComponent } from '../../shared/components/locked-content-card/locked-content-card.component';
+import { PhotoInteractionsComponent } from '../../shared/components/photo-interactions/photo-interactions.component';
 
 @Component({
   selector: 'app-creator-profile',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, PhotoInteractionsComponent, LockedContentCardComponent],
   templateUrl: './creator-profile.component.html',
 })
 export class CreatorProfileComponent implements OnInit {
@@ -22,6 +24,9 @@ export class CreatorProfileComponent implements OnInit {
   loading = false;
   subscribing = false;
   creatorId: number = 0;
+  contentAccess: CreatorContentAccess | null = null;
+  totalContentCount = 0;
+  premiumContentCount = 0;
 
   constructor(
     private route: ActivatedRoute,
@@ -63,11 +68,19 @@ export class CreatorProfileComponent implements OnInit {
         },
       });
 
-      // Load creator's photos (public preview + sample)
+      // Load creator's photos with access control
       this.photoService.getCreatorPhotos(this.creatorId).subscribe({
-        next: (photos) => {
-          this.creatorPhotos = photos;
-          this.samplePhotos = photos.filter((p) => !p.isPremium).slice(0, 6);
+        next: (contentData) => {
+          this.contentAccess = contentData;
+          this.creatorPhotos = contentData.photos || [];
+          this.samplePhotos = contentData.publicPhotos || [];
+          this.totalContentCount = contentData.totalCount || 0;
+          this.premiumContentCount = contentData.premiumCount || 0;
+
+          // If user has no access, show limited preview
+          if (!contentData.hasAccess) {
+            this.samplePhotos = contentData.photos.slice(0, 3);
+          }
         },
         error: (error) => {
           console.error('Error loading photos:', error);
@@ -92,7 +105,7 @@ export class CreatorProfileComponent implements OnInit {
   }
 
   private loadMockPhotos(): void {
-    this.samplePhotos = [
+    const mockPhotos = [
       {
         id: 1,
         url: 'https://via.placeholder.com/400x400/FF69B4/FFFFFF?text=Sample+1',
@@ -130,6 +143,20 @@ export class CreatorProfileComponent implements OnInit {
         isPremium: false,
       },
     ];
+
+    this.contentAccess = {
+      hasAccess: false,
+      photos: mockPhotos,
+      publicPhotos: mockPhotos,
+      premiumPhotos: [],
+      totalCount: 15,
+      premiumCount: 12,
+      previewCount: 3,
+    };
+
+    this.samplePhotos = mockPhotos;
+    this.totalContentCount = 15;
+    this.premiumContentCount = 12;
   }
 
   checkSubscriptionStatus(): void {

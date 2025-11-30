@@ -2,21 +2,22 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
-import { Creator, Photo, User } from '../../core/models';
+import { Creator, Photo, PhotoWithCreator, User } from '../../core/models';
 import { AuthService } from '../../core/services/auth.service';
 import { PhotoService } from '../../core/services/photo.service';
 import { SubscriptionService } from '../../core/services/subscription.service';
+import { PhotoInteractionsComponent } from '../../shared/components/photo-interactions/photo-interactions.component';
 
 @Component({
   selector: 'app-gallery',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterModule],
+  imports: [CommonModule, ReactiveFormsModule, RouterModule, PhotoInteractionsComponent],
   templateUrl: './gallery.component.html',
 })
 export class GalleryComponent implements OnInit {
-  photos: Photo[] = [];
+  photos: PhotoWithCreator[] = [];
   creators: Creator[] = [];
-  filteredPhotos: Photo[] = [];
+  filteredPhotos: PhotoWithCreator[] = [];
   filterForm: FormGroup;
   user: User | null = null;
   loading = false;
@@ -61,9 +62,7 @@ export class GalleryComponent implements OnInit {
       // Load subscribed creators
       this.subscriptionService.getMySubscriptions().subscribe({
         next: (subscriptions) => {
-          this.creators = subscriptions
-            .filter((sub) => sub.isActive)
-            .map((sub) => sub.creator as Creator);
+          this.creators = subscriptions.filter((sub) => sub.isActive).map((sub) => sub.creator);
         },
         error: (error) => {
           console.error('Error loading subscriptions:', error);
@@ -71,10 +70,11 @@ export class GalleryComponent implements OnInit {
       });
 
       // Load photos from subscribed creators
-      this.photoService.getSubscribedContent().subscribe({
+      this.photoService.getPhotos().subscribe({
         next: (photos) => {
-          this.photos = photos;
-          this.filteredPhotos = [...photos];
+          // Convert Photo[] to PhotoWithCreator[]
+          this.photos = photos.map((photo) => this.convertPhotoToPhotoWithCreator(photo));
+          this.filteredPhotos = [...this.photos];
           this.applySorting();
         },
         error: (error) => {
@@ -98,21 +98,39 @@ export class GalleryComponent implements OnInit {
         id: 1,
         url: 'https://via.placeholder.com/400x600/FF69B4/FFFFFF?text=Premium+Content',
         description: 'Beautiful sunset photography session',
-        creator: { id: 1, email: 'photographer1@example.com', isCreator: true, isActive: true },
+        creator: {
+          id: 1,
+          email: 'photographer1@example.com',
+          photoCount: 25,
+          subscriptionPrice: 9.99,
+          isActive: true,
+        },
         isPremium: true,
       },
       {
         id: 2,
         url: 'https://via.placeholder.com/400x400/87CEEB/FFFFFF?text=Free+Preview',
         description: 'Behind the scenes from todays shoot',
-        creator: { id: 1, email: 'photographer1@example.com', isCreator: true, isActive: true },
+        creator: {
+          id: 1,
+          email: 'photographer1@example.com',
+          photoCount: 25,
+          subscriptionPrice: 9.99,
+          isActive: true,
+        },
         isPremium: false,
       },
       {
         id: 3,
         url: 'https://via.placeholder.com/400x500/FFB6C1/FFFFFF?text=Exclusive+Content',
         description: 'Exclusive content for subscribers',
-        creator: { id: 2, email: 'artist2@example.com', isCreator: true, isActive: true },
+        creator: {
+          id: 2,
+          email: 'artist2@example.com',
+          photoCount: 42,
+          subscriptionPrice: 14.99,
+          isActive: true,
+        },
         isPremium: true,
       },
     ];
@@ -199,21 +217,40 @@ export class GalleryComponent implements OnInit {
     this.selectedCreator = null;
   }
 
-  openPhotoModal(photo: Photo): void {
+  openPhotoModal(photo: PhotoWithCreator): void {
     // Implement photo modal/lightbox functionality
     console.log('Opening photo:', photo);
   }
 
-  likePhoto(photo: Photo): void {
+  likePhoto(photo: PhotoWithCreator): void {
     // Implement like functionality
     console.log('Liked photo:', photo.id);
   }
 
-  downloadPhoto(photo: Photo): void {
+  downloadPhoto(photo: PhotoWithCreator): void {
     // Implement download functionality for premium subscribers
     if (photo.isPremium) {
       console.log('Downloading premium content:', photo.id);
       // Add actual download logic here
     }
+  }
+
+  private convertPhotoToPhotoWithCreator(photo: Photo): PhotoWithCreator {
+    // Find the creator in our creators list to get full Creator data
+    const creatorData = this.creators.find((c) => c.id === photo.creator.id);
+
+    return {
+      id: photo.id,
+      url: photo.url,
+      description: photo.description,
+      isPremium: photo.isPremium,
+      creator: creatorData || {
+        id: photo.creator.id,
+        email: photo.creator.email,
+        photoCount: 0,
+        subscriptionPrice: photo.creator.subscriptionPrice || 9.99,
+        isActive: photo.creator.isActive,
+      },
+    };
   }
 }

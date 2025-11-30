@@ -79,6 +79,68 @@ CREATE DATABASE onlyfans_dev;
 CREATE USER onlyfans_user WITH PASSWORD 'your_password_here';
 GRANT ALL PRIVILEGES ON DATABASE onlyfans_dev TO onlyfans_user;
 \q
+
+# Connect to the new database and create initial schema
+psql -h localhost -U onlyfans_user -d onlyfans_dev
+
+# Create tables (if not using TypeORM migrations)
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    is_creator BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE photos (
+    id SERIAL PRIMARY KEY,
+    url VARCHAR(500) NOT NULL,
+    description TEXT,
+    creator_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    is_premium BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE subscriptions (
+    id SERIAL PRIMARY KEY,
+    subscriber_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    creator_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    end_date TIMESTAMP,
+    stripe_subscription_id VARCHAR(255),
+    status VARCHAR(50) DEFAULT 'active',
+    UNIQUE(subscriber_id, creator_id)
+);
+
+CREATE TABLE likes (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    photo_id INTEGER NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, photo_id)
+);
+
+CREATE TABLE comments (
+    id SERIAL PRIMARY KEY,
+    content TEXT NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    photo_id INTEGER NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+# Create performance indexes
+CREATE INDEX idx_photos_creator_id ON photos(creator_id);
+CREATE INDEX idx_photos_is_premium ON photos(is_premium);
+CREATE INDEX idx_subscriptions_subscriber_id ON subscriptions(subscriber_id);
+CREATE INDEX idx_subscriptions_creator_id ON subscriptions(creator_id);
+CREATE INDEX idx_likes_user_id ON likes(user_id);
+CREATE INDEX idx_likes_photo_id ON likes(photo_id);
+CREATE INDEX idx_comments_photo_id ON comments(photo_id);
+
+\q
 ```
 
 #### Alternative: Docker PostgreSQL
@@ -145,17 +207,35 @@ FRONTEND_URL=http://localhost:4200
 # Stripe Configuration (get from https://dashboard.stripe.com/)
 STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key_here
 STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here
+STRIPE_PRICE_ID=price_subscription_monthly_price_id
 
 # File Upload Configuration
 UPLOAD_PATH=./uploads
 MAX_FILE_SIZE=5242880  # 5MB in bytes
+ALLOWED_MIME_TYPES=image/jpeg,image/png,image/gif,image/webp
+
+# Content Security
+LOCKED_CONTENT_THUMBNAIL=/assets/locked-thumbnail.jpg
+CONTENT_ENCRYPTION_KEY=your-content-encryption-key-here
+
+# Social Features
+ENABLE_LIKES=true
+ENABLE_COMMENTS=true
+MAX_COMMENT_LENGTH=500
+COMMENT_MODERATION=false
 
 # Security Settings
 BCRYPT_SALT_ROUNDS=12
 JWT_EXPIRATION=24h
+RATE_LIMIT_WINDOW_MS=900000  # 15 minutes
+RATE_LIMIT_MAX_REQUESTS=100
 
 # CORS Settings
 CORS_ORIGIN=http://localhost:4200
+
+# Logging Configuration
+LOG_LEVEL=info
+LOG_FILE_PATH=./logs
 ```
 
 ### 4. Frontend Setup
@@ -271,17 +351,42 @@ FRONTEND_URL=https://yourdomain.com
 # Stripe Configuration (LIVE keys)
 STRIPE_SECRET_KEY=sk_live_your_live_stripe_secret_key
 STRIPE_WEBHOOK_SECRET=whsec_your_live_webhook_secret
+STRIPE_PRICE_ID=price_live_subscription_monthly_price_id
 
 # File Upload Configuration
 UPLOAD_PATH=/var/www/onlyfans-platform/uploads
-MAX_FILE_SIZE=5242880
+MAX_FILE_SIZE=10485760  # 10MB for production
+ALLOWED_MIME_TYPES=image/jpeg,image/png,image/gif,image/webp
+
+# Content Security
+LOCKED_CONTENT_THUMBNAIL=https://yourdomain.com/assets/locked-thumbnail.jpg
+CONTENT_ENCRYPTION_KEY=production-content-encryption-key-secure
+CDN_URL=https://cdn.yourdomain.com  # Optional CDN for file delivery
+
+# Social Features
+ENABLE_LIKES=true
+ENABLE_COMMENTS=true
+MAX_COMMENT_LENGTH=500
+COMMENT_MODERATION=true  # Enable content moderation in production
 
 # Security Settings
-BCRYPT_SALT_ROUNDS=12
+BCRYPT_SALT_ROUNDS=14  # Higher for production
 JWT_EXPIRATION=24h
+RATE_LIMIT_WINDOW_MS=900000  # 15 minutes
+RATE_LIMIT_MAX_REQUESTS=50   # Lower for production
+
+# Performance Settings
+REDIS_URL=redis://localhost:6379
+CACHE_TTL=3600  # 1 hour cache TTL
+ENABLE_QUERY_CACHE=true
 
 # CORS Settings
 CORS_ORIGIN=https://yourdomain.com
+
+# Logging Configuration
+LOG_LEVEL=warn
+LOG_FILE_PATH=/var/log/onlyfans
+SENTRY_DSN=your-sentry-dsn-for-error-tracking  # Optional error tracking
 ```
 
 #### 4. Process Management with PM2

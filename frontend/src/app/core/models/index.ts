@@ -79,7 +79,7 @@ export interface Creator {
 export interface SubscriptionDetails {
   id: number;
   subscriber: User;
-  creator: User;
+  creator: Creator;
   startDate: Date;
   endDate: Date | null;
   isActive: boolean;
@@ -95,4 +95,54 @@ export interface UpdateProfileRequest {
 export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
+}
+
+export interface Like {
+  id: number;
+  user: {
+    id: number;
+    name: string;
+    email: string;
+    avatar?: string;
+  };
+  createdAt: Date;
+}
+
+export interface Comment {
+  id: number;
+  content: string;
+  user: {
+    id: number;
+    name: string;
+    email: string;
+    avatar?: string;
+  };
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface PhotoWithInteractions extends Photo {
+  likesCount?: number;
+  commentsCount?: number;
+  isLikedByUser?: boolean;
+  likes?: Like[];
+  comments?: Comment[];
+}
+
+export interface PhotoWithCreator {
+  id: number;
+  url: string;
+  description: string;
+  creator: Creator;
+  isPremium: boolean;
+}
+
+export interface CreatorContentAccess {
+  hasAccess: boolean;
+  photos: Photo[];
+  publicPhotos: Photo[];
+  premiumPhotos: Photo[];
+  totalCount: number;
+  premiumCount: number;
+  previewCount?: number;
 }
