@@ -2,14 +2,18 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
   Post,
+  Put,
   Request,
   UploadedFile,
   UseGuards,
   UseInterceptors,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -98,5 +102,42 @@ export class PhotosController {
       throw new BadRequestException('Photo not found or access denied');
     }
     return photo;
+  }
+
+  @Get('creator/:creatorId')
+  async getCreatorPhotos(
+    @Param('creatorId', ParseIntPipe) creatorId: number,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.photosService.getCreatorPhotos(creatorId, req.user.userId);
+  }
+
+  @Get('my/photos')
+  @Roles('creator')
+  async getMyPhotos(@Request() req: AuthenticatedRequest) {
+    return this.photosService.getCreatorPhotos(
+      req.user.userId,
+      req.user.userId,
+    );
+  }
+
+  @Put(':id')
+  @Roles('creator')
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  async updatePhoto(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: AuthenticatedRequest,
+    @Body() updateData: { description?: string; isPremium?: boolean },
+  ) {
+    return this.photosService.updatePhoto(id, req.user.userId, updateData);
+  }
+
+  @Delete(':id')
+  @Roles('creator')
+  async deletePhoto(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.photosService.deletePhoto(id, req.user.userId);
   }
 }

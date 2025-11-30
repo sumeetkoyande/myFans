@@ -28,4 +28,12 @@ export class SubscriptionService {
   getAvailableCreators(): Observable<Creator[]> {
     return this.http.get<Creator[]>(`${environment.apiUrl}/users/creators`);
   }
+
+  getCreatorById(creatorId: number): Observable<Creator> {
+    return this.http.get<Creator>(`${environment.apiUrl}/users/creators/${creatorId}`);
+  }
+
+  checkSubscription(creatorId: number): Observable<boolean> {
+    return this.http.get<boolean>(`${this.apiUrl}/check/${creatorId}`);
+  }
 }

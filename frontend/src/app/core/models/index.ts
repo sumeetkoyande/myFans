@@ -3,6 +3,11 @@ export interface User {
   email: string;
   isCreator: boolean;
   isActive: boolean;
+  role?: 'user' | 'creator';
+  displayName?: string;
+  bio?: string;
+  subscriptionPrice?: number;
+  profileImage?: string;
 }
 
 export interface LoginRequest {
@@ -78,4 +83,16 @@ export interface SubscriptionDetails {
   startDate: Date;
   endDate: Date | null;
   isActive: boolean;
+}
+
+export interface UpdateProfileRequest {
+  displayName?: string;
+  bio?: string;
+  subscriptionPrice?: number;
+  profileImage?: string;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
 }

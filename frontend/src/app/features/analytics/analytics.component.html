@@ -1,0 +1,396 @@
+<div class="min-h-screen bg-gray-50">
+  <!-- Header -->
+  <div class="bg-white shadow">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div class="flex justify-between items-center">
+        <div>
+          <h1 class="text-3xl font-bold text-gray-900">Creator Analytics</h1>
+          <p class="text-gray-600 mt-1">
+            Track your earnings, subscribers, and content performance
+          </p>
+        </div>
+
+        <div class="flex items-center space-x-4">
+          <button
+            (click)="downloadEarningsReport()"
+            class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors"
+          >
+            Download Report
+          </button>
+          <button
+            *ngIf="canRequestPayout"
+            (click)="requestPayout()"
+            class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+          >
+            Request Payout
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="loading" class="flex justify-center items-center h-64">
+    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+  </div>
+
+  <!-- Analytics Content -->
+  <div *ngIf="!loading && analytics" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Key Metrics -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <!-- Total Earnings -->
+      <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center">
+          <div class="flex-shrink-0">
+            <div class="w-8 h-8 bg-green-100 rounded-md flex items-center justify-center">
+              <svg
+                class="w-5 h-5 text-green-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
+                ></path>
+              </svg>
+            </div>
+          </div>
+          <div class="ml-5 w-0 flex-1">
+            <dl>
+              <dt class="text-sm font-medium text-gray-500 truncate">Total Earnings</dt>
+              <dd class="text-2xl font-bold text-gray-900">
+                {{ formatCurrency(analytics.totalEarnings) }}
+              </dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+
+      <!-- Monthly Earnings -->
+      <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center">
+          <div class="flex-shrink-0">
+            <div class="w-8 h-8 bg-blue-100 rounded-md flex items-center justify-center">
+              <svg
+                class="w-5 h-5 text-blue-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                ></path>
+              </svg>
+            </div>
+          </div>
+          <div class="ml-5 w-0 flex-1">
+            <dl>
+              <dt class="text-sm font-medium text-gray-500 truncate">This Month</dt>
+              <dd class="text-2xl font-bold text-gray-900">
+                {{ formatCurrency(analytics.monthlyEarnings) }}
+              </dd>
+              <dd
+                class="flex items-center text-sm"
+                [class.text-green-600]="getGrowthPercentage() > 0"
+                [class.text-red-600]="getGrowthPercentage() < 0"
+                [class.text-gray-600]="getGrowthPercentage() === 0"
+              >
+                <svg
+                  *ngIf="getGrowthPercentage() > 0"
+                  class="w-4 h-4 mr-1"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M7 17l9.2-9.2M17 17V7H7"
+                  ></path>
+                </svg>
+                <svg
+                  *ngIf="getGrowthPercentage() < 0"
+                  class="w-4 h-4 mr-1"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M17 7l-9.2 9.2M7 7v10h10"
+                  ></path>
+                </svg>
+                {{ getGrowthPercentage().toFixed(1) }}% vs last month
+              </dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+
+      <!-- Subscribers -->
+      <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center">
+          <div class="flex-shrink-0">
+            <div class="w-8 h-8 bg-purple-100 rounded-md flex items-center justify-center">
+              <svg
+                class="w-5 h-5 text-purple-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"
+                ></path>
+              </svg>
+            </div>
+          </div>
+          <div class="ml-5 w-0 flex-1">
+            <dl>
+              <dt class="text-sm font-medium text-gray-500 truncate">Active Subscribers</dt>
+              <dd class="text-2xl font-bold text-gray-900">{{ analytics.subscribers }}</dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+
+      <!-- Content Count -->
+      <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center">
+          <div class="flex-shrink-0">
+            <div class="w-8 h-8 bg-orange-100 rounded-md flex items-center justify-center">
+              <svg
+                class="w-5 h-5 text-orange-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                ></path>
+              </svg>
+            </div>
+          </div>
+          <div class="ml-5 w-0 flex-1">
+            <dl>
+              <dt class="text-sm font-medium text-gray-500 truncate">Total Content</dt>
+              <dd class="text-2xl font-bold text-gray-900">{{ analytics.totalContent }}</dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts and Detailed Analytics -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+      <!-- Earnings History Chart -->
+      <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Earnings History</h3>
+        <div class="space-y-4">
+          <div
+            *ngFor="let period of analytics.earningsHistory"
+            class="flex items-center justify-between"
+          >
+            <div class="flex items-center space-x-3">
+              <div class="w-2 h-2 bg-primary-500 rounded-full"></div>
+              <span class="text-sm text-gray-900">{{ period.month }}</span>
+            </div>
+            <span class="text-sm font-medium text-gray-900">{{
+              formatCurrency(period.amount)
+            }}</span>
+          </div>
+        </div>
+        <div class="mt-4 pt-4 border-t border-gray-200">
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-medium text-gray-500">Average Monthly</span>
+            <span class="text-sm font-bold text-gray-900">
+              {{ formatCurrency(analytics.earningsHistory.reduce((sum, p) => sum + p.amount, 0) / analytics.earningsHistory.length) }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top Performing Content -->
+      <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Top Performing Content</h3>
+        <div class="space-y-4">
+          <div
+            *ngFor="let content of analytics.topContent; let i = index"
+            class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+          >
+            <div class="flex items-center space-x-3">
+              <div
+                class="flex-shrink-0 w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center"
+              >
+                <span class="text-xs font-medium text-primary-600">{{ i + 1 }}</span>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium text-gray-900 truncate">{{ content.title }}</p>
+                <p class="text-xs text-gray-500">{{ content.views }} views</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <p class="text-sm font-medium text-gray-900">
+                {{ formatCurrency(content.earnings) }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Subscribers -->
+    <div class="bg-white rounded-lg shadow">
+      <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-lg font-medium text-gray-900">Recent Subscribers</h3>
+      </div>
+      <div class="overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th
+                scope="col"
+                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
+                Subscriber
+              </th>
+              <th
+                scope="col"
+                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
+                Date
+              </th>
+              <th
+                scope="col"
+                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
+                Amount
+              </th>
+              <th
+                scope="col"
+                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
+                Status
+              </th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            <tr *ngFor="let subscriber of analytics.recentSubscribers" class="hover:bg-gray-50">
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="flex items-center">
+                  <div
+                    class="flex-shrink-0 h-8 w-8 bg-primary-100 rounded-full flex items-center justify-center"
+                  >
+                    <span class="text-sm font-medium text-primary-600">
+                      {{ subscriber.email.charAt(0).toUpperCase() }}
+                    </span>
+                  </div>
+                  <div class="ml-4">
+                    <div class="text-sm font-medium text-gray-900">{{ subscriber.email }}</div>
+                  </div>
+                </div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="text-sm text-gray-900">{{ formatDate(subscriber.date) }}</div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="text-sm font-medium text-gray-900">
+                  {{ formatCurrency(subscriber.amount) }}
+                </div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span
+                  class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
+                >
+                  Active
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Payout Information -->
+    <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
+      <div class="flex">
+        <div class="flex-shrink-0">
+          <svg class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            ></path>
+          </svg>
+        </div>
+        <div class="ml-3">
+          <h3 class="text-sm font-medium text-blue-800">Payout Information</h3>
+          <div class="mt-2 text-sm text-blue-700">
+            <p>
+              You can request a payout once your earnings reach $25.00.
+              <span *ngIf="!canRequestPayout">
+                You need {{ formatCurrency(25.0 - analytics.totalEarnings) }} more to request a
+                payout.
+              </span>
+              <span *ngIf="canRequestPayout">
+                You're eligible for a payout of {{ formatCurrency(analytics.totalEarnings) }}.
+              </span>
+            </p>
+            <p class="mt-1">
+              Payouts are processed within 1-3 business days to your linked bank account.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- No Access State -->
+  <div
+    *ngIf="!loading && (!user || (!user.isCreator && user.role !== 'creator'))"
+    class="text-center py-12"
+  >
+    <div class="max-w-md mx-auto">
+      <svg
+        class="mx-auto h-12 w-12 text-gray-400"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+        />
+      </svg>
+      <h3 class="mt-2 text-sm font-medium text-gray-900">Creator Access Required</h3>
+      <p class="mt-1 text-sm text-gray-500">
+        You need to be a creator to access analytics and earnings data.
+      </p>
+      <div class="mt-6">
+        <a
+          routerLink="/profile"
+          class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+        >
+          Become a Creator
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

@@ -28,4 +28,12 @@ export class PhotoService {
   getPhotoById(id: number): Observable<Photo> {
     return this.http.get<Photo>(`${this.apiUrl}/${id}`);
   }
+
+  getSubscribedContent(): Observable<Photo[]> {
+    return this.http.get<Photo[]>(`${this.apiUrl}/subscribed-content`);
+  }
+
+  getCreatorPhotos(creatorId: number): Observable<Photo[]> {
+    return this.http.get<Photo[]>(`${this.apiUrl}/creator/${creatorId}`);
+  }
 }

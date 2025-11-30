@@ -1,0 +1,362 @@
+<div class="min-h-screen bg-gray-50">
+  <!-- Header -->
+  <div class="bg-white shadow">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div class="flex justify-between items-center">
+        <div>
+          <h1 class="text-3xl font-bold text-gray-900">My Content Gallery</h1>
+          <p class="text-gray-600 mt-1">Browse content from creators you've subscribed to</p>
+        </div>
+
+        <div class="flex items-center space-x-4">
+          <!-- View Mode Toggle -->
+          <button
+            (click)="toggleViewMode()"
+            class="p-2 border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          >
+            <svg
+              *ngIf="viewMode === 'grid'"
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 6h16M4 10h16M4 14h16M4 18h16"
+              ></path>
+            </svg>
+            <svg
+              *ngIf="viewMode === 'list'"
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+              ></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters and Search -->
+  <div class="bg-white border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <form [formGroup]="filterForm" class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <!-- Search -->
+          <div>
+            <label for="search" class="block text-sm font-medium text-gray-700 mb-1">
+              Search Content
+            </label>
+            <input
+              type="text"
+              id="search"
+              formControlName="searchTerm"
+              placeholder="Search by description or creator..."
+              class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+            />
+          </div>
+
+          <!-- Creator Filter -->
+          <div>
+            <label for="creator" class="block text-sm font-medium text-gray-700 mb-1">
+              Filter by Creator
+            </label>
+            <select
+              id="creator"
+              formControlName="creatorFilter"
+              class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+            >
+              <option value="">All Creators</option>
+              <option *ngFor="let creator of creators" [value]="creator.id">
+                {{ creator.email }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Sort By -->
+          <div>
+            <label for="sort" class="block text-sm font-medium text-gray-700 mb-1"> Sort By </label>
+            <select
+              id="sort"
+              formControlName="sortBy"
+              class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="creator">Creator Name</option>
+            </select>
+          </div>
+
+          <!-- Premium Filter -->
+          <div class="flex items-end">
+            <div class="flex items-center h-10">
+              <input
+                type="checkbox"
+                id="premium"
+                formControlName="premiumOnly"
+                class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+              <label for="premium" class="ml-2 block text-sm text-gray-900">
+                Premium content only
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clear Filters Button -->
+        <div class="flex justify-end">
+          <button
+            type="button"
+            (click)="clearFilters()"
+            class="text-sm text-primary-600 hover:text-primary-700 focus:outline-none focus:underline"
+          >
+            Clear all filters
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Creator Tabs -->
+  <div *ngIf="creators.length > 0" class="bg-white border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex space-x-8 overflow-x-auto py-4">
+        <button
+          (click)="selectCreator(null)"
+          [class]="
+            selectedCreator === null
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+          "
+          class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors"
+        >
+          All Creators ({{ photos.length }})
+        </button>
+        <button
+          *ngFor="let creator of creators"
+          (click)="selectCreator(creator)"
+          [class]="
+            selectedCreator?.id === creator.id
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+          "
+          class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors"
+        >
+          {{ creator.email }}
+          <span class="ml-2 bg-gray-100 text-gray-900 py-1 px-2 rounded-full text-xs">
+            {{ photos.filter(p => p.creator.id === creator.id).length }}
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content Area -->
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Loading State -->
+    <div *ngIf="loading" class="flex justify-center items-center h-64">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+    </div>
+
+    <!-- Empty State -->
+    <div *ngIf="!loading && filteredPhotos.length === 0" class="text-center py-12">
+      <svg
+        class="mx-auto h-12 w-12 text-gray-400"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+        />
+      </svg>
+      <h3 class="mt-2 text-sm font-medium text-gray-900">No content found</h3>
+      <p class="mt-1 text-sm text-gray-500">
+        <span *ngIf="photos.length === 0">You haven't subscribed to any creators yet.</span>
+        <span *ngIf="photos.length > 0">Try adjusting your filters to see more content.</span>
+      </p>
+      <div class="mt-6">
+        <a
+          routerLink="/subscriptions"
+          class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+        >
+          Browse Creators
+        </a>
+      </div>
+    </div>
+
+    <!-- Grid View -->
+    <div
+      *ngIf="!loading && filteredPhotos.length > 0 && viewMode === 'grid'"
+      class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
+    >
+      <div
+        *ngFor="let photo of filteredPhotos"
+        class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+      >
+        <!-- Image -->
+        <div class="relative cursor-pointer" (click)="openPhotoModal(photo)">
+          <img
+            [src]="photo.url"
+            [alt]="photo.description"
+            class="w-full h-64 object-cover"
+            loading="lazy"
+          />
+
+          <!-- Premium Badge -->
+          <div
+            *ngIf="photo.isPremium"
+            class="absolute top-2 left-2 bg-yellow-500 text-white px-2 py-1 rounded-md text-xs font-medium"
+          >
+            Premium
+          </div>
+
+          <!-- Overlay on Hover -->
+          <div
+            class="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 transition-opacity flex items-center justify-center opacity-0 hover:opacity-100"
+          >
+            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              ></path>
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+              ></path>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Content -->
+        <div class="p-4">
+          <p class="text-sm text-gray-900 mb-2">{{ photo.description }}</p>
+          <p class="text-xs text-gray-500 mb-3">by {{ photo.creator.email }}</p>
+
+          <!-- Actions -->
+          <div class="flex justify-between items-center">
+            <button
+              (click)="likePhoto(photo)"
+              class="flex items-center text-sm text-gray-500 hover:text-red-500 transition-colors"
+            >
+              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                ></path>
+              </svg>
+              Like
+            </button>
+
+            <button
+              *ngIf="photo.isPremium"
+              (click)="downloadPhoto(photo)"
+              class="flex items-center text-sm text-primary-600 hover:text-primary-700 transition-colors"
+            >
+              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                ></path>
+              </svg>
+              Download
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- List View -->
+    <div *ngIf="!loading && filteredPhotos.length > 0 && viewMode === 'list'" class="space-y-4">
+      <div
+        *ngFor="let photo of filteredPhotos"
+        class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+      >
+        <div class="flex">
+          <!-- Image -->
+          <div class="flex-shrink-0 cursor-pointer" (click)="openPhotoModal(photo)">
+            <img
+              [src]="photo.url"
+              [alt]="photo.description"
+              class="w-32 h-32 object-cover"
+              loading="lazy"
+            />
+          </div>
+
+          <!-- Content -->
+          <div class="flex-1 p-4">
+            <div class="flex justify-between items-start">
+              <div>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">{{ photo.description }}</h3>
+                <p class="text-sm text-gray-500 mb-2">by {{ photo.creator.email }}</p>
+
+                <div class="flex items-center space-x-4">
+                  <span
+                    *ngIf="photo.isPremium"
+                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800"
+                  >
+                    Premium Content
+                  </span>
+                </div>
+              </div>
+
+              <!-- Actions -->
+              <div class="flex items-center space-x-2">
+                <button
+                  (click)="likePhoto(photo)"
+                  class="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                    ></path>
+                  </svg>
+                </button>
+
+                <button
+                  *ngIf="photo.isPremium"
+                  (click)="downloadPhoto(photo)"
+                  class="p-2 text-gray-400 hover:text-primary-600 transition-colors"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    ></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,427 @@
+<div class="min-h-screen bg-gray-50">
+  <!-- Header -->
+  <div class="bg-white shadow">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div class="flex justify-between items-center">
+        <div>
+          <h1 class="text-3xl font-bold text-gray-900">Content Manager</h1>
+          <p class="text-gray-600 mt-1">Organize and manage your uploaded content</p>
+        </div>
+
+        <div class="flex items-center space-x-4">
+          <a
+            routerLink="/upload"
+            class="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+          >
+            Upload New Content
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Bar -->
+  <div class="bg-white border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+        <div class="bg-gray-50 rounded-lg p-4">
+          <div class="text-2xl font-bold text-gray-900">{{ photos.length }}</div>
+          <div class="text-sm text-gray-600">Total Photos</div>
+        </div>
+        <div class="bg-yellow-50 rounded-lg p-4">
+          <div class="text-2xl font-bold text-yellow-600">{{ premiumPhotosCount }}</div>
+          <div class="text-sm text-gray-600">Premium Content</div>
+        </div>
+        <div class="bg-green-50 rounded-lg p-4">
+          <div class="text-2xl font-bold text-green-600">{{ freePhotosCount }}</div>
+          <div class="text-sm text-gray-600">Free Previews</div>
+        </div>
+        <div class="bg-blue-50 rounded-lg p-4">
+          <div class="text-2xl font-bold text-blue-600">{{ selectedPhotos.length }}</div>
+          <div class="text-sm text-gray-600">Selected</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters and Controls -->
+  <div class="bg-white border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <div
+        class="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0"
+      >
+        <!-- Search and Filters -->
+        <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
+          <!-- Search -->
+          <div class="relative">
+            <input
+              type="text"
+              placeholder="Search content..."
+              (input)="onSearch($event)"
+              class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+            />
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg
+                class="h-5 w-5 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                ></path>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Filter by Type -->
+          <select
+            (change)="onFilterChange($event)"
+            [value]="filterBy"
+            class="block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+          >
+            <option value="all">All Content</option>
+            <option value="premium">Premium Only</option>
+            <option value="free">Free Only</option>
+          </select>
+
+          <!-- Sort -->
+          <select
+            (change)="onSortChange($event)"
+            [value]="sortBy"
+            class="block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+          >
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="premium">Premium First</option>
+            <option value="free">Free First</option>
+          </select>
+        </div>
+
+        <!-- View Controls -->
+        <div class="flex items-center space-x-4">
+          <!-- Bulk Actions -->
+          <div *ngIf="selectedPhotos.length > 0" class="flex items-center space-x-2">
+            <button
+              (click)="togglePremiumForSelected()"
+              class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md text-sm font-medium transition-colors"
+            >
+              Toggle Premium
+            </button>
+            <button
+              (click)="deleteSelectedPhotos()"
+              class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md text-sm font-medium transition-colors"
+            >
+              Delete Selected
+            </button>
+          </div>
+
+          <!-- View Mode Toggle -->
+          <button
+            (click)="toggleViewMode()"
+            class="p-2 border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          >
+            <svg
+              *ngIf="viewMode === 'grid'"
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 6h16M4 10h16M4 14h16M4 18h16"
+              ></path>
+            </svg>
+            <svg
+              *ngIf="viewMode === 'list'"
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+              ></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Select All -->
+      <div *ngIf="filteredPhotos.length > 0" class="mt-4 flex items-center">
+        <input
+          type="checkbox"
+          [checked]="allPhotosSelected"
+          [indeterminate]="somePhotosSelected"
+          (change)="selectAllPhotos()"
+          class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+        />
+        <label class="ml-2 block text-sm text-gray-900">
+          Select All ({{ filteredPhotos.length }} items)
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content Area -->
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Loading State -->
+    <div *ngIf="loading" class="flex justify-center items-center h-64">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+    </div>
+
+    <!-- Empty State -->
+    <div *ngIf="!loading && filteredPhotos.length === 0" class="text-center py-12">
+      <svg
+        class="mx-auto h-12 w-12 text-gray-400"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+        />
+      </svg>
+      <h3 class="mt-2 text-sm font-medium text-gray-900">No content found</h3>
+      <p class="mt-1 text-sm text-gray-500">
+        <span *ngIf="photos.length === 0">You haven't uploaded any content yet.</span>
+        <span *ngIf="photos.length > 0">No content matches the current filters.</span>
+      </p>
+      <div class="mt-6">
+        <a
+          routerLink="/upload"
+          class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+        >
+          Upload Your First Photo
+        </a>
+      </div>
+    </div>
+
+    <!-- Grid View -->
+    <div
+      *ngIf="!loading && filteredPhotos.length > 0 && viewMode === 'grid'"
+      class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
+    >
+      <div
+        *ngFor="let photo of filteredPhotos"
+        class="bg-white rounded-lg shadow-md overflow-hidden"
+      >
+        <!-- Selection Checkbox -->
+        <div class="relative">
+          <img [src]="photo.url" [alt]="photo.description" class="w-full h-48 object-cover" />
+
+          <div class="absolute top-2 left-2">
+            <input
+              type="checkbox"
+              [checked]="isPhotoSelected(photo.id)"
+              (change)="selectPhoto(photo.id)"
+              class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+            />
+          </div>
+
+          <!-- Premium Badge -->
+          <div
+            *ngIf="photo.isPremium"
+            class="absolute top-2 right-2 bg-yellow-500 text-white px-2 py-1 rounded-md text-xs font-medium"
+          >
+            Premium
+          </div>
+        </div>
+
+        <!-- Content -->
+        <div class="p-4">
+          <p class="text-sm text-gray-900 mb-3 line-clamp-2">{{ photo.description }}</p>
+
+          <!-- Actions -->
+          <div class="flex justify-between items-center">
+            <div class="flex space-x-2">
+              <button
+                (click)="editPhoto(photo)"
+                class="text-primary-600 hover:text-primary-700 text-sm font-medium"
+              >
+                Edit
+              </button>
+              <button
+                (click)="deletePhoto(photo)"
+                class="text-red-600 hover:text-red-700 text-sm font-medium"
+              >
+                Delete
+              </button>
+            </div>
+
+            <span
+              [class]="
+                photo.isPremium ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+              "
+              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+            >
+              {{ photo.isPremium ? 'Premium' : 'Free' }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- List View -->
+    <div
+      *ngIf="!loading && filteredPhotos.length > 0 && viewMode === 'list'"
+      class="bg-white shadow rounded-lg overflow-hidden"
+    >
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th
+              scope="col"
+              class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+            >
+              <input
+                type="checkbox"
+                [checked]="allPhotosSelected"
+                [indeterminate]="somePhotosSelected"
+                (change)="selectAllPhotos()"
+                class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+            </th>
+            <th
+              scope="col"
+              class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+            >
+              Content
+            </th>
+            <th
+              scope="col"
+              class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+            >
+              Type
+            </th>
+            <th
+              scope="col"
+              class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+            >
+              Actions
+            </th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          <tr *ngFor="let photo of filteredPhotos" class="hover:bg-gray-50">
+            <td class="px-6 py-4 whitespace-nowrap">
+              <input
+                type="checkbox"
+                [checked]="isPhotoSelected(photo.id)"
+                (change)="selectPhoto(photo.id)"
+                class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="flex items-center">
+                <img
+                  class="h-16 w-16 rounded-md object-cover mr-4"
+                  [src]="photo.url"
+                  [alt]="photo.description"
+                />
+                <div>
+                  <div class="text-sm font-medium text-gray-900">{{ photo.description }}</div>
+                  <div class="text-sm text-gray-500">Photo ID: {{ photo.id }}</div>
+                </div>
+              </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span
+                [class]="
+                  photo.isPremium ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+                "
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+              >
+                {{ photo.isPremium ? 'Premium' : 'Free' }}
+              </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+              <div class="flex space-x-4">
+                <button (click)="editPhoto(photo)" class="text-primary-600 hover:text-primary-900">
+                  Edit
+                </button>
+                <button (click)="deletePhoto(photo)" class="text-red-600 hover:text-red-900">
+                  Delete
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Photo Modal -->
+<div *ngIf="editingPhoto" class="fixed inset-0 z-50 overflow-y-auto">
+  <div
+    class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0"
+  >
+    <div
+      class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+      (click)="cancelEdit()"
+    ></div>
+
+    <div
+      class="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6"
+    >
+      <form [formGroup]="editForm" (ngSubmit)="savePhoto()">
+        <div class="mb-4">
+          <label for="description" class="block text-sm font-medium text-gray-700 mb-2">
+            Description
+          </label>
+          <textarea
+            id="description"
+            formControlName="description"
+            rows="3"
+            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+            placeholder="Enter photo description..."
+          ></textarea>
+        </div>
+
+        <div class="mb-6">
+          <div class="flex items-center">
+            <input
+              id="isPremium"
+              type="checkbox"
+              formControlName="isPremium"
+              class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+            />
+            <label for="isPremium" class="ml-2 block text-sm text-gray-900">
+              Premium content (subscribers only)
+            </label>
+          </div>
+        </div>
+
+        <div class="flex justify-end space-x-3">
+          <button
+            type="button"
+            (click)="cancelEdit()"
+            class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            [disabled]="editForm.invalid"
+            class="bg-primary-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+          >
+            Save Changes
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

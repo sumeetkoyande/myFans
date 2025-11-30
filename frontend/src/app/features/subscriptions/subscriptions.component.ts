@@ -118,11 +118,29 @@ export class SubscriptionsComponent implements OnInit {
         console.error('Error loading creators:', error);
         // Fallback to mock data if API fails
         this.creators = [
-          { id: 1, email: 'creator1@example.com', photoCount: 25, subscriptionPrice: 9.99, isActive: true },
-          { id: 2, email: 'creator2@example.com', photoCount: 42, subscriptionPrice: 14.99, isActive: true },
-          { id: 3, email: 'creator3@example.com', photoCount: 18, subscriptionPrice: 7.99, isActive: true },
+          {
+            id: 1,
+            email: 'creator1@example.com',
+            photoCount: 25,
+            subscriptionPrice: 9.99,
+            isActive: true,
+          },
+          {
+            id: 2,
+            email: 'creator2@example.com',
+            photoCount: 42,
+            subscriptionPrice: 14.99,
+            isActive: true,
+          },
+          {
+            id: 3,
+            email: 'creator3@example.com',
+            photoCount: 18,
+            subscriptionPrice: 7.99,
+            isActive: true,
+          },
         ];
-      }
+      },
     });
   }
 
@@ -134,7 +152,7 @@ export class SubscriptionsComponent implements OnInit {
       error: (error) => {
         console.error('Error loading subscriptions:', error);
         this.currentSubscriptions = [];
-      }
+      },
     });
   }
 
@@ -143,10 +161,12 @@ export class SubscriptionsComponent implements OnInit {
       this.loading = true;
 
       // Get creator details to determine price
-      const creator = this.creators.find(c => c.id === creatorId);
+      const creator = this.creators.find((c) => c.id === creatorId);
       const amount = creator?.subscriptionPrice || 9.99;
 
-      const response = await this.paymentService.createCheckoutSession(creatorId, amount).toPromise();
+      const response = await this.paymentService
+        .createCheckoutSession(creatorId, amount)
+        .toPromise();
       if (response?.sessionId) {
         await this.paymentService.redirectToCheckout(response.sessionId);
       }

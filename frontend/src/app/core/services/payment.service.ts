@@ -11,7 +11,10 @@ export class PaymentService {
 
   constructor(private http: HttpClient) {}
 
-  createCheckoutSession(creatorId: number, amount: number = 9.99): Observable<{ sessionId: string }> {
+  createCheckoutSession(
+    creatorId: number,
+    amount: number = 9.99
+  ): Observable<{ sessionId: string }> {
     return this.http.post<{ sessionId: string }>(`${this.apiUrl}/subscribe`, {
       creatorId,
       amount,
@@ -21,5 +24,9 @@ export class PaymentService {
   async redirectToCheckout(sessionId: string): Promise<void> {
     // Simple redirect to Stripe Checkout
     window.location.href = `https://checkout.stripe.com/pay/${sessionId}`;
+  }
+
+  getPaymentHistory(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.apiUrl}/history`);
   }
 }

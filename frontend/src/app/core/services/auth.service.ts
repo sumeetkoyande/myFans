@@ -65,6 +65,21 @@ export class AuthService {
     return user ? user.isCreator : false;
   }
 
+  changePassword(currentPassword: string, newPassword: string): Observable<any> {
+    return this.http.put(`${this.apiUrl}/change-password`, {
+      currentPassword,
+      newPassword,
+    });
+  }
+
+  becomeCreator(): Observable<User> {
+    return this.http.put<User>(`${this.apiUrl}/become-creator`, {}).pipe(
+      tap((user) => {
+        this.currentUserSubject.next(user);
+      })
+    );
+  }
+
   private loadUserFromToken(): void {
     const token = this.getToken();
     if (token && !this.jwtHelper.isTokenExpired(token)) {
@@ -76,6 +91,7 @@ export class AuthService {
         email: decodedToken.email,
         isCreator: decodedToken.isCreator,
         isActive: true,
+        role: decodedToken.isCreator ? 'creator' : 'user',
       });
     }
   }

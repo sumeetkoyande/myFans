@@ -2,7 +2,10 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  Param,
+  ParseIntPipe,
   Post,
   Request,
   UseGuards,
@@ -60,5 +63,32 @@ export class SubscriptionsController {
     return await this.subscriptionsService.getCreatorSubscribers(
       req.user.userId,
     );
+  }
+
+  @Delete(':creatorId')
+  @Roles('user')
+  async unsubscribe(
+    @Request() req: AuthenticatedRequest,
+    @Param('creatorId', ParseIntPipe) creatorId: number,
+  ) {
+    return this.subscriptionsService.unsubscribe(req.user.userId, creatorId);
+  }
+
+  @Get('status/:creatorId')
+  @Roles('user', 'creator')
+  async getSubscriptionStatus(
+    @Request() req: AuthenticatedRequest,
+    @Param('creatorId', ParseIntPipe) creatorId: number,
+  ) {
+    return this.subscriptionsService.getSubscriptionStatus(
+      req.user.userId,
+      creatorId,
+    );
+  }
+
+  @Get('analytics/overview')
+  @Roles('creator')
+  async getSubscriptionAnalytics(@Request() req: AuthenticatedRequest) {
+    return this.subscriptionsService.getSubscriptionAnalytics(req.user.userId);
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
@@ -80,5 +80,77 @@ export class PhotosService {
     }
 
     return null; // No access
+  }
+
+  async getCreatorPhotos(
+    creatorId: number,
+    viewerId: number,
+  ): Promise<Photo[]> {
+    const isOwner = creatorId === viewerId;
+    const isSubscribed =
+      !isOwner &&
+      (
+        await this.subscriptionsService.getSubscribedCreatorIds(viewerId)
+      ).includes(creatorId);
+
+    const queryBuilder = this.photosRepository
+      .createQueryBuilder('photo')
+      .leftJoinAndSelect('photo.creator', 'creator')
+      .where('photo.creator.id = :creatorId', { creatorId });
+
+    if (!isOwner && !isSubscribed) {
+      // Only show public photos for non-subscribers
+      queryBuilder.andWhere('photo.isPremium = :isPremium', {
+        isPremium: false,
+      });
+    }
+
+    return queryBuilder.orderBy('photo.createdAt', 'DESC').getMany();
+  }
+
+  async updatePhoto(
+    photoId: number,
+    userId: number,
+    updateData: { description?: string; isPremium?: boolean },
+  ): Promise<Photo> {
+    const photo = await this.photosRepository.findOne({
+      where: { id: photoId },
+      relations: ['creator'],
+    });
+
+    if (!photo) {
+      throw new BadRequestException('Photo not found');
+    }
+
+    if (photo.creator.id !== userId) {
+      throw new BadRequestException('You can only update your own photos');
+    }
+
+    await this.photosRepository.update(photoId, updateData);
+    return this.photosRepository.findOne({
+      where: { id: photoId },
+      relations: ['creator'],
+    });
+  }
+
+  async deletePhoto(
+    photoId: number,
+    userId: number,
+  ): Promise<{ message: string }> {
+    const photo = await this.photosRepository.findOne({
+      where: { id: photoId },
+      relations: ['creator'],
+    });
+
+    if (!photo) {
+      throw new BadRequestException('Photo not found');
+    }
+
+    if (photo.creator.id !== userId) {
+      throw new BadRequestException('You can only delete your own photos');
+    }
+
+    await this.photosRepository.delete(photoId);
+    return { message: 'Photo deleted successfully' };
   }
 }
