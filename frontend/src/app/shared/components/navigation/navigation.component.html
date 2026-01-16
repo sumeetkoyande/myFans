@@ -1,10 +1,14 @@
-<nav class="bg-white shadow-sm border-b border-gray-200">
+<nav *ngIf="shouldShowNavigation()" class="bg-white shadow-sm border-b border-gray-200">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex justify-between h-16">
       <!-- Logo and Brand -->
       <div class="flex items-center">
         <div class="flex-shrink-0 flex items-center">
-          <a routerLink="/" class="flex items-center space-x-2" (click)="closeMenus()">
+          <a
+            [routerLink]="user() ? '/dashboard' : '/subscriptions'"
+            class="flex items-center space-x-2"
+            (click)="closeMenus()"
+          >
             <div
               class="w-8 h-8 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg flex items-center justify-center"
             >
@@ -17,7 +21,7 @@
         <!-- Desktop Navigation Links -->
         <div class="hidden md:ml-10 md:flex md:space-x-8">
           <!-- Public Navigation (when not logged in) -->
-          <div *ngIf="!user" class="flex space-x-8">
+          <div *ngIf="!user()" class="flex space-x-8">
             <a
               routerLink="/subscriptions"
               [class]="
@@ -33,7 +37,7 @@
           </div>
 
           <!-- Authenticated User Navigation -->
-          <div *ngIf="user" class="flex space-x-8">
+          <div *ngIf="user()" class="flex space-x-8">
             <!-- Common Links for All Users -->
             <a
               routerLink="/dashboard"
@@ -76,7 +80,7 @@
 
             <!-- Creator-Only Links -->
             <a
-              *ngIf="user.isCreator || user.role === 'creator'"
+              *ngIf="user()?.isCreator || user()?.role === 'creator'"
               routerLink="/upload"
               [class]="
                 isActive('/upload')
@@ -113,7 +117,7 @@
         </div>
 
         <!-- User Menu (when logged in) -->
-        <div *ngIf="user" class="hidden md:flex md:items-center md:space-x-4">
+        <div *ngIf="user()" class="hidden md:flex md:items-center md:space-x-4">
           <!-- Notifications -->
           <button
             class="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
@@ -141,23 +145,23 @@
               <span class="sr-only">Open user menu</span>
               <div class="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center">
                 <span class="text-sm font-medium text-primary-600">
-                  {{ user.email.charAt(0).toUpperCase() }}
+                  {{ user()!.email.charAt(0).toUpperCase() }}
                 </span>
               </div>
             </button>
 
             <!-- Dropdown Menu -->
             <div
-              *ngIf="isUserMenuOpen"
+              *ngIf="isUserMenuOpen()"
               class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50"
               role="menu"
               aria-orientation="vertical"
               aria-labelledby="user-menu-button"
             >
               <div class="px-4 py-2 text-sm text-gray-700 border-b border-gray-100">
-                <div class="font-medium">{{ user.email }}</div>
+                <div class="font-medium">{{ user()!.email }}</div>
                 <div class="text-xs text-gray-500">
-                  {{ user.isCreator || user.role === 'creator' ? 'Creator' : 'Subscriber' }}
+                  {{ user()?.isCreator || user()?.role === 'creator' ? 'Creator' : 'Subscriber' }}
                 </div>
               </div>
 
@@ -180,7 +184,7 @@
               </a>
 
               <a
-                *ngIf="user.isCreator || user.role === 'creator'"
+                *ngIf="user()?.isCreator || user()?.role === 'creator'"
                 routerLink="/analytics"
                 class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                 role="menuitem"
@@ -212,7 +216,7 @@
             <span class="sr-only">Open main menu</span>
             <!-- Menu Icon -->
             <svg
-              *ngIf="!isMenuOpen"
+              *ngIf="!isMenuOpen()"
               class="block h-6 w-6"
               fill="none"
               viewBox="0 0 24 24"
@@ -227,7 +231,7 @@
             </svg>
             <!-- Close Icon -->
             <svg
-              *ngIf="isMenuOpen"
+              *ngIf="isMenuOpen()"
               class="block h-6 w-6"
               fill="none"
               viewBox="0 0 24 24"
@@ -247,10 +251,10 @@
   </div>
 
   <!-- Mobile Menu -->
-  <div *ngIf="isMenuOpen" class="md:hidden">
+  <div *ngIf="isMenuOpen()" class="md:hidden">
     <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-gray-50 border-t border-gray-200">
       <!-- Public Mobile Links -->
-      <div *ngIf="!user">
+      <div *ngIf="!user()">
         <a
           routerLink="/subscriptions"
           [class]="
@@ -283,7 +287,7 @@
       </div>
 
       <!-- Authenticated Mobile Links -->
-      <div *ngIf="user">
+      <div *ngIf="user()">
         <a
           routerLink="/dashboard"
           [class]="
@@ -324,7 +328,7 @@
         </a>
 
         <a
-          *ngIf="user.isCreator || user.role === 'creator'"
+          *ngIf="user()?.isCreator || user()?.role === 'creator'"
           routerLink="/upload"
           [class]="
             isActive('/upload')
@@ -340,9 +344,9 @@
         <!-- User Menu Items -->
         <div class="border-t border-gray-200 mt-3 pt-3">
           <div class="px-4 py-2">
-            <div class="text-base font-medium text-gray-800">{{ user.email }}</div>
+            <div class="text-base font-medium text-gray-800">{{ user()!.email }}</div>
             <div class="text-sm font-medium text-gray-500">
-              {{ user.isCreator || user.role === 'creator' ? 'Creator' : 'Subscriber' }}
+              {{ user()?.isCreator || user()?.role === 'creator' ? 'Creator' : 'Subscriber' }}
             </div>
           </div>
 
@@ -363,7 +367,7 @@
           </a>
 
           <a
-            *ngIf="user.isCreator || user.role === 'creator'"
+            *ngIf="user()?.isCreator || user()?.role === 'creator'"
             routerLink="/analytics"
             class="block px-4 py-2 text-base font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 transition-colors"
             (click)="closeMenus()"
@@ -385,7 +389,7 @@
 
 <!-- Overlay for mobile menu -->
 <div
-  *ngIf="isMenuOpen || isUserMenuOpen"
+  *ngIf="isMenuOpen() || isUserMenuOpen()"
   class="fixed inset-0 z-40 bg-black bg-opacity-25 md:hidden"
   (click)="closeMenus()"
 ></div>

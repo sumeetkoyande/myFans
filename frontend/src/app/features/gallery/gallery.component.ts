@@ -1,7 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { Creator, Photo, PhotoWithCreator, User } from '../../core/models';
 import { AuthService } from '../../core/services/auth.service';
 import { PhotoService } from '../../core/services/photo.service';
@@ -14,23 +15,25 @@ import { PhotoInteractionsComponent } from '../../shared/components/photo-intera
   imports: [CommonModule, ReactiveFormsModule, RouterModule, PhotoInteractionsComponent],
   templateUrl: './gallery.component.html',
 })
-export class GalleryComponent implements OnInit {
-  photos: PhotoWithCreator[] = [];
-  creators: Creator[] = [];
-  filteredPhotos: PhotoWithCreator[] = [];
+export class GalleryComponent implements OnInit, OnDestroy {
+  photos = signal<PhotoWithCreator[]>([]);
+  creators = signal<Creator[]>([]);
+  filteredPhotos = signal<PhotoWithCreator[]>([]);
   filterForm: FormGroup;
-  user: User | null = null;
-  loading = false;
-  selectedCreator: Creator | null = null;
-  viewMode: 'grid' | 'list' = 'grid';
-  sortBy: 'newest' | 'oldest' | 'creator' = 'newest';
-  showPremiumOnly = false;
+  user = signal<User | null>(null);
+  loading = signal(false);
+  selectedCreator = signal<Creator | null>(null);
+  viewMode = signal<'grid' | 'list'>('grid');
+  sortBy = signal<'newest' | 'oldest' | 'creator'>('newest');
+  showPremiumOnly = signal(false);
+  private subscriptions = new Subscription();
 
   constructor(
     private photoService: PhotoService,
     private authService: AuthService,
     private subscriptionService: SubscriptionService,
-    private fb: FormBuilder
+    private fb: FormBuilder,
+    private cdr: ChangeDetectorRef
   ) {
     this.filterForm = this.fb.group({
       searchTerm: [''],
@@ -41,12 +44,19 @@ export class GalleryComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.authService.currentUser$.subscribe((user) => {
-      this.user = user;
+    // Subscribe to user changes
+    const userSub = this.authService.currentUser$.subscribe((user) => {
+      this.user.set(user);
+      this.cdr.markForCheck();
     });
+    this.subscriptions.add(userSub);
 
     this.loadSubscribedContent();
     this.setupFilters();
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
   }
 
   setupFilters(): void {
@@ -57,43 +67,54 @@ export class GalleryComponent implements OnInit {
 
   async loadSubscribedContent(): Promise<void> {
     try {
-      this.loading = true;
+      this.loading.set(true);
 
       // Load subscribed creators
-      this.subscriptionService.getMySubscriptions().subscribe({
+      const creatorsSub = this.subscriptionService.getMySubscriptions().subscribe({
         next: (subscriptions) => {
-          this.creators = subscriptions.filter((sub) => sub.isActive).map((sub) => sub.creator);
+          const activeCreators = subscriptions
+            .filter((sub) => sub.isActive)
+            .map((sub) => sub.creator);
+          this.creators.set(activeCreators);
+          this.cdr.markForCheck();
         },
         error: (error) => {
           console.error('Error loading subscriptions:', error);
+          this.loading.set(false);
+          this.cdr.markForCheck();
         },
       });
+      this.subscriptions.add(creatorsSub);
 
       // Load photos from subscribed creators
-      this.photoService.getPhotos().subscribe({
+      const photosSub = this.photoService.getPhotos().subscribe({
         next: (photos) => {
           // Convert Photo[] to PhotoWithCreator[]
-          this.photos = photos.map((photo) => this.convertPhotoToPhotoWithCreator(photo));
-          this.filteredPhotos = [...this.photos];
+          const convertedPhotos = photos.map((photo) => this.convertPhotoToPhotoWithCreator(photo));
+          this.photos.set(convertedPhotos);
+          this.filteredPhotos.set([...convertedPhotos]);
           this.applySorting();
+          this.loading.set(false);
+          this.cdr.markForCheck();
         },
         error: (error) => {
           console.error('Error loading content:', error);
           // Fallback to mock data for demonstration
           this.loadMockContent();
+          this.loading.set(false);
+          this.cdr.markForCheck();
         },
       });
+      this.subscriptions.add(photosSub);
     } catch (error) {
       console.error('Error loading content:', error);
       this.loadMockContent();
-    } finally {
-      this.loading = false;
     }
   }
 
   private loadMockContent(): void {
     // Mock data for demonstration
-    this.photos = [
+    const mockPhotos: PhotoWithCreator[] = [
       {
         id: 1,
         url: 'https://via.placeholder.com/400x600/FF69B4/FFFFFF?text=Premium+Content',
@@ -135,7 +156,8 @@ export class GalleryComponent implements OnInit {
       },
     ];
 
-    this.creators = [
+    this.photos.set(mockPhotos);
+    this.creators.set([
       {
         id: 1,
         email: 'photographer1@example.com',
@@ -150,14 +172,16 @@ export class GalleryComponent implements OnInit {
         subscriptionPrice: 14.99,
         isActive: true,
       },
-    ];
+    ]);
 
-    this.filteredPhotos = [...this.photos];
+    this.filteredPhotos.set([...mockPhotos]);
     this.applySorting();
+    this.loading.set(false);
+    this.cdr.markForCheck();
   }
 
   applyFilters(filters: any): void {
-    let filtered = [...this.photos];
+    let filtered = [...this.photos()];
 
     // Search term filter
     if (filters.searchTerm) {
@@ -179,31 +203,35 @@ export class GalleryComponent implements OnInit {
       filtered = filtered.filter((photo) => photo.isPremium);
     }
 
-    this.filteredPhotos = filtered;
-    this.sortBy = filters.sortBy;
+    this.filteredPhotos.set(filtered);
+    this.sortBy.set(filters.sortBy);
     this.applySorting();
+    this.cdr.markForCheck();
   }
 
   applySorting(): void {
-    switch (this.sortBy) {
+    const currentPhotos = [...this.filteredPhotos()];
+    switch (this.sortBy()) {
       case 'newest':
-        this.filteredPhotos.sort((a, b) => b.id - a.id);
+        currentPhotos.sort((a, b) => b.id - a.id);
         break;
       case 'oldest':
-        this.filteredPhotos.sort((a, b) => a.id - b.id);
+        currentPhotos.sort((a, b) => a.id - b.id);
         break;
       case 'creator':
-        this.filteredPhotos.sort((a, b) => a.creator.email.localeCompare(b.creator.email));
+        currentPhotos.sort((a, b) => a.creator.email.localeCompare(b.creator.email));
         break;
     }
+    this.filteredPhotos.set(currentPhotos);
+    this.cdr.markForCheck();
   }
 
   toggleViewMode(): void {
-    this.viewMode = this.viewMode === 'grid' ? 'list' : 'grid';
+    this.viewMode.set(this.viewMode() === 'grid' ? 'list' : 'grid');
   }
 
   selectCreator(creator: Creator): void {
-    this.selectedCreator = creator;
+    this.selectedCreator.set(creator);
     this.filterForm.patchValue({ creatorFilter: creator.id });
   }
 
@@ -214,7 +242,7 @@ export class GalleryComponent implements OnInit {
       sortBy: 'newest',
       premiumOnly: false,
     });
-    this.selectedCreator = null;
+    this.selectedCreator.set(null);
   }
 
   openPhotoModal(photo: PhotoWithCreator): void {
@@ -237,7 +265,7 @@ export class GalleryComponent implements OnInit {
 
   private convertPhotoToPhotoWithCreator(photo: Photo): PhotoWithCreator {
     // Find the creator in our creators list to get full Creator data
-    const creatorData = this.creators.find((c) => c.id === photo.creator.id);
+    const creatorData = this.creators().find((c) => c.id === photo.creator.id);
 
     return {
       id: photo.id,
@@ -255,11 +283,12 @@ export class GalleryComponent implements OnInit {
   }
 
   getPhotoCountForCreator(creatorId: number): number {
-    return this.photos.filter((p) => p.creator.id === creatorId).length;
+    return this.photos().filter((p) => p.creator.id === creatorId).length;
   }
 
   selectAllCreators(): void {
-    this.selectedCreator = null;
+    this.selectedCreator.set(null);
+    this.filteredPhotos.set(this.photos());
     this.filteredPhotos = this.photos;
   }
 }

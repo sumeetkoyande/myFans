@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { RouterModule } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { Photo, User } from '../../core/models';
 import { AuthService } from '../../core/services/auth.service';
 import { PhotoService } from '../../core/services/photo.service';
@@ -11,31 +12,11 @@ import { PhotoService } from '../../core/services/photo.service';
   imports: [CommonModule, RouterModule],
   template: `
     <div class="min-h-screen bg-gray-50">
-      <!-- Header -->
-      <header class="bg-white shadow">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div class="flex justify-between h-16">
-            <div class="flex items-center">
-              <h1 class="text-xl font-semibold text-gray-900">Dashboard</h1>
-            </div>
-            <div class="flex items-center space-x-4">
-              <span class="text-gray-700">{{ user?.email }}</span>
-              <button
-                (click)="logout()"
-                class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md text-sm font-medium"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
       <!-- Main Content -->
       <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div class="px-4 py-6 sm:px-0">
           <!-- Creator Dashboard -->
-          <div *ngIf="user?.isCreator" class="space-y-6">
+          <div *ngIf="user()?.isCreator" class="space-y-6">
             <div class="bg-white shadow rounded-lg p-6">
               <h2 class="text-lg font-medium text-gray-900 mb-4">Creator Dashboard</h2>
               <div class="flex space-x-4">
@@ -47,7 +28,7 @@ import { PhotoService } from '../../core/services/photo.service';
             <div class="bg-white shadow rounded-lg p-6">
               <h3 class="text-lg font-medium text-gray-900 mb-4">Your Photos</h3>
               <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                <div *ngFor="let photo of photos" class="relative">
+                <div *ngFor="let photo of photos()" class="relative">
                   <img
                     [src]="photo.url"
                     [alt]="photo.description"
@@ -63,7 +44,7 @@ import { PhotoService } from '../../core/services/photo.service';
           </div>
 
           <!-- Subscriber Dashboard -->
-          <div *ngIf="!user?.isCreator" class="space-y-6">
+          <div *ngIf="!user()?.isCreator" class="space-y-6">
             <div class="bg-white shadow rounded-lg p-6">
               <h2 class="text-lg font-medium text-gray-900 mb-4">Subscriber Dashboard</h2>
               <p class="text-gray-600 mb-4">Discover and subscribe to your favorite creators</p>
@@ -73,7 +54,7 @@ import { PhotoService } from '../../core/services/photo.service';
             <div class="bg-white shadow rounded-lg p-6">
               <h3 class="text-lg font-medium text-gray-900 mb-4">Available Content</h3>
               <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                <div *ngFor="let photo of photos" class="relative">
+                <div *ngFor="let photo of photos()" class="relative">
                   <img
                     [src]="photo.url"
                     [alt]="photo.description"
@@ -102,28 +83,41 @@ import { PhotoService } from '../../core/services/photo.service';
     </div>
   `,
 })
-export class DashboardComponent implements OnInit {
-  user: User | null = null;
-  photos: Photo[] = [];
+export class DashboardComponent implements OnInit, OnDestroy {
+  user = signal<User | null>(null);
+  photos = signal<Photo[]>([]);
+  private subscriptions = new Subscription();
 
-  constructor(private authService: AuthService, private photoService: PhotoService) {}
+  constructor(
+    private authService: AuthService,
+    private photoService: PhotoService,
+    private cdr: ChangeDetectorRef
+  ) {}
 
   ngOnInit(): void {
-    this.authService.currentUser$.subscribe((user) => {
-      this.user = user;
+    const userSub = this.authService.currentUser$.subscribe((user) => {
+      this.user.set(user);
+      this.cdr.markForCheck();
     });
+    this.subscriptions.add(userSub);
     this.loadPhotos();
   }
 
+  ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
+  }
+
   loadPhotos(): void {
-    this.photoService.getPhotos().subscribe({
+    const photosSub = this.photoService.getPhotos().subscribe({
       next: (photos) => {
-        this.photos = photos;
+        this.photos.set(photos);
+        this.cdr.markForCheck();
       },
       error: (err) => {
         console.error('Error loading photos:', err);
       },
     });
+    this.subscriptions.add(photosSub);
   }
 
   subscribeToCreator(creatorId: number): void {

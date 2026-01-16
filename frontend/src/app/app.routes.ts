@@ -15,7 +15,7 @@ import { UploadComponent } from './features/upload/upload.component';
 export const routes: Routes = [
   {
     path: '',
-    redirectTo: '/login',
+    redirectTo: '/dashboard',
     pathMatch: 'full',
   },
   {
@@ -43,6 +43,10 @@ export const routes: Routes = [
   },
   {
     path: 'subscriptions',
+    component: SubscriptionsComponent,
+  },
+  {
+    path: 'browse-creators',
     component: SubscriptionsComponent,
   },
   {
