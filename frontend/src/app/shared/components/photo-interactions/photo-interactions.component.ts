@@ -14,12 +14,12 @@ import { PhotoService } from '../../../core/services/photo.service';
       <!-- Photo Display -->
       <div class="p-4">
         <img
-          [src]="photo().url"
-          [alt]="photo().description"
+          [src]="_photo().url"
+          [alt]="_photo().description"
           class="w-full h-64 object-cover rounded-lg"
         />
-        <p class="mt-2 text-gray-700">{{ photo().description }}</p>
-        <p class="text-sm text-gray-500">by {{ photo().creator.email }}</p>
+        <p class="mt-2 text-gray-700">{{ _photo().description }}</p>
+        <p class="text-sm text-gray-500">by {{ _photo().creator.email }}</p>
       </div>
 
       <!-- Like and Comment Actions -->
@@ -127,7 +127,11 @@ import { PhotoService } from '../../../core/services/photo.service';
   `,
 })
 export class PhotoInteractionsComponent implements OnInit {
-  @Input({ required: true }) photo = signal<Photo | PhotoWithCreator>({} as Photo);
+  @Input({ required: true }) set photo(value: Photo | PhotoWithCreator) {
+    this._photo.set(value);
+  }
+
+  protected _photo = signal<Photo | PhotoWithCreator>({} as Photo);
 
   likes = signal<Like[]>([]);
   comments = signal<Comment[]>([]);
@@ -146,7 +150,7 @@ export class PhotoInteractionsComponent implements OnInit {
   }
 
   loadLikes() {
-    this.photoService.getPhotoLikes(this.photo().id).subscribe({
+    this.photoService.getPhotoLikes(this._photo().id).subscribe({
       next: (response) => {
         this.likes.set(response.likes);
         this.likesCount.set(response.count);
@@ -162,7 +166,7 @@ export class PhotoInteractionsComponent implements OnInit {
   }
 
   loadComments() {
-    this.photoService.getPhotoComments(this.photo().id).subscribe({
+    this.photoService.getPhotoComments(this._photo().id).subscribe({
       next: (comments) => {
         this.comments.set(comments);
       },
@@ -174,8 +178,8 @@ export class PhotoInteractionsComponent implements OnInit {
     this.isLiking.set(true);
 
     const action = this.isLikedByUser()
-      ? this.photoService.unlikePhoto(this.photo().id)
-      : this.photoService.likePhoto(this.photo().id);
+      ? this.photoService.unlikePhoto(this._photo().id)
+      : this.photoService.likePhoto(this._photo().id);
 
     action.subscribe({
       next: (response) => {
@@ -201,7 +205,7 @@ export class PhotoInteractionsComponent implements OnInit {
     if (!this.newComment.trim()) return;
 
     this.isCommenting.set(true);
-    this.photoService.commentOnPhoto(this.photo().id, this.newComment.trim()).subscribe({
+    this.photoService.commentOnPhoto(this._photo().id, this.newComment.trim()).subscribe({
       next: () => {
         this.newComment = '';
         this.loadComments();
@@ -230,7 +234,7 @@ export class PhotoInteractionsComponent implements OnInit {
     if (!currentUser) return false;
 
     // User can delete their own comment or if they own the photo
-    return comment.user.id === currentUser.id || this.photo().creator.id === currentUser.id;
+    return comment.user.id === currentUser.id || this._photo().creator.id === currentUser.id;
   }
 
   formatDate(date: Date): string {

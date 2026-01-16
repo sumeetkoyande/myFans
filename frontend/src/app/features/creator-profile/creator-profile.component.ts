@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { Creator, CreatorContentAccess, Photo, User } from '../../core/models';
 import { AuthService } from '../../core/services/auth.service';
@@ -27,6 +27,7 @@ export class CreatorProfileComponent implements OnInit {
   contentAccess: CreatorContentAccess | null = null;
   totalContentCount = 0;
   premiumContentCount = 0;
+  premiumContentCountSignal = signal(0);
 
   constructor(
     private route: ActivatedRoute,
@@ -76,6 +77,7 @@ export class CreatorProfileComponent implements OnInit {
           this.samplePhotos = contentData.publicPhotos || [];
           this.totalContentCount = contentData.totalCount || 0;
           this.premiumContentCount = contentData.premiumCount || 0;
+          this.premiumContentCountSignal.set(contentData.premiumCount || 0);
 
           // If user has no access, show limited preview
           if (!contentData.hasAccess) {
@@ -157,6 +159,7 @@ export class CreatorProfileComponent implements OnInit {
     this.samplePhotos = mockPhotos;
     this.totalContentCount = 15;
     this.premiumContentCount = 12;
+    this.premiumContentCountSignal.set(12);
   }
 
   checkSubscriptionStatus(): void {
@@ -212,5 +215,12 @@ export class CreatorProfileComponent implements OnInit {
 
   goBack(): void {
     this.router.navigate(['/subscriptions']);
+  }
+
+  getLockedCardArray(): number[] {
+    const count = Math.min(8, this.premiumContentCount || 4);
+    return Array(count)
+      .fill(0)
+      .map((_, i) => i);
   }
 }

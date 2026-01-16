@@ -253,4 +253,13 @@ export class GalleryComponent implements OnInit {
       },
     };
   }
+
+  getPhotoCountForCreator(creatorId: number): number {
+    return this.photos.filter((p) => p.creator.id === creatorId).length;
+  }
+
+  selectAllCreators(): void {
+    this.selectedCreator = null;
+    this.filteredPhotos = this.photos;
+  }
 }

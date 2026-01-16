@@ -218,7 +218,7 @@
           <div class="flex justify-between items-center">
             <span class="text-sm font-medium text-gray-500">Average Monthly</span>
             <span class="text-sm font-bold text-gray-900">
-              {{ formatCurrency(analytics.earningsHistory.reduce((sum, p) => sum + p.amount, 0) / analytics.earningsHistory.length) }}
+              {{ formatCurrency(getAverageMonthlyEarnings()) }}
             </span>
           </div>
         </div>

@@ -84,7 +84,7 @@
             <dl>
               <dt class="text-sm font-medium text-gray-500 truncate">Active Subscriptions</dt>
               <dd class="text-lg font-medium text-gray-900">
-                {{ payments.filter(p => p.status === 'completed').length }}
+                {{ getPaymentCountByStatus('completed') }}
               </dd>
             </dl>
           </div>
@@ -119,7 +119,7 @@
             "
             class="px-3 py-2 rounded-md text-sm font-medium transition-colors"
           >
-            Completed ({{ payments.filter(p => p.status === 'completed').length }})
+            Completed ({{ getPaymentCountByStatus('completed') }})
           </button>
           <button
             (click)="filterByStatus('pending')"
@@ -130,7 +130,7 @@
             "
             class="px-3 py-2 rounded-md text-sm font-medium transition-colors"
           >
-            Pending ({{ payments.filter(p => p.status === 'pending').length }})
+            Pending ({{ getPaymentCountByStatus('pending') }})
           </button>
           <button
             (click)="filterByStatus('failed')"
@@ -141,7 +141,7 @@
             "
             class="px-3 py-2 rounded-md text-sm font-medium transition-colors"
           >
-            Failed ({{ payments.filter(p => p.status === 'failed').length }})
+            Failed ({{ getPaymentCountByStatus('failed') }})
           </button>
           <button
             (click)="filterByStatus('refunded')"
@@ -152,7 +152,7 @@
             "
             class="px-3 py-2 rounded-md text-sm font-medium transition-colors"
           >
-            Refunded ({{ payments.filter(p => p.status === 'refunded').length }})
+            Refunded ({{ getPaymentCountByStatus('refunded') }})
           </button>
         </div>
       </div>

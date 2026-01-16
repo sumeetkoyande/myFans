@@ -142,4 +142,16 @@ export class AnalyticsComponent implements OnInit {
   get canRequestPayout(): boolean {
     return this.analytics ? this.analytics.totalEarnings >= 25.0 : false;
   }
+
+  getAverageMonthlyEarnings(): number {
+    if (
+      !this.analytics ||
+      !this.analytics.earningsHistory ||
+      this.analytics.earningsHistory.length === 0
+    ) {
+      return 0;
+    }
+    const total = this.analytics.earningsHistory.reduce((sum, p) => sum + p.amount, 0);
+    return total / this.analytics.earningsHistory.length;
+  }
 }

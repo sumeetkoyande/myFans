@@ -133,7 +133,7 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex space-x-8 overflow-x-auto py-4">
         <button
-          (click)="selectCreator(null)"
+          (click)="selectAllCreators()"
           [class]="
             selectedCreator === null
               ? 'border-primary-500 text-primary-600'
@@ -155,7 +155,7 @@
         >
           {{ creator.email }}
           <span class="ml-2 bg-gray-100 text-gray-900 py-1 px-2 rounded-full text-xs">
-            {{ photos.filter(p => p.creator.id === creator.id).length }}
+            {{ getPhotoCountForCreator(creator.id) }}
           </span>
         </button>
       </div>

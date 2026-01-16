@@ -257,8 +257,8 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
               <!-- Show multiple locked content cards -->
               <app-locked-content-card
-                *ngFor="let i of [].constructor(Math.min(8, premiumContentCount || 4))"
-                [contentCount]="premiumContentCount"
+                *ngFor="let i of getLockedCardArray()"
+                [contentCount]="premiumContentCountSignal"
                 [onSubscribeClick]="subscribeToCreator.bind(this)"
               >
               </app-locked-content-card>

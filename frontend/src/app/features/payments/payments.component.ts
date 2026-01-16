@@ -197,4 +197,8 @@ export class PaymentsComponent implements OnInit {
   filterByStatus(status: string): void {
     this.selectedStatus = status;
   }
+
+  getPaymentCountByStatus(status: string): number {
+    return this.payments.filter((p) => p.status === status).length;
+  }
 }
